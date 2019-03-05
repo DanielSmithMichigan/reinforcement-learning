@@ -1,0 +1,30 @@
+import numpy as np
+from Agent import Agent
+
+agent = Agent(
+    name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
+    policyNetworkSize=[256, 256],
+    qNetworkSize=[256, 256],
+    valueNetworkSize=[256, 256],
+    entropyCoefficient=1.0,
+    valueNetworkLearningRate=2e-4,
+    policyNetworkLearningRate=2e-4,
+    qNetworkLearningRate=2e-4,
+    tau=0.001,
+    gamma=.997,
+    maxMemoryLength=int(1e6),
+    priorityExponent=0,
+    batchSize=64,
+    maxGradientNorm=5,
+    maxEpisodes=1024,
+    maxSteps=1024,
+    minStepsBeforeTraining=1024,
+    rewardScaling=1.0,
+    actionScaling=2.0,
+    stepsPerUpdate=1,
+    render=False,
+    theta=0.15,
+    sigma=0.2
+)
+
+agent.execute()
