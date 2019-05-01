@@ -4,8 +4,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 plt.ion()
 
-import util
-import constants
+from . import util
+from . import constants
 
 class QNetwork:
     def __init__(self,
@@ -72,11 +72,11 @@ class QNetwork:
         self.valueNetwork = valueNetwork
     def buildTrainingOperation(self):
         self.rewardsPh = tf.placeholder(tf.float32, [None])
-        util.assertShape(self.rewardsPh, [])
+        # util.assertShape(self.rewardsPh, [])
         self.terminalsPh = tf.to_float(tf.placeholder(tf.bool, [None]))
-        util.assertShape(self.terminalsPh, [])
+        # util.assertShape(self.terminalsPh, [])
         reshapedValue = tf.reshape(self.valueNetwork.value, [-1])
-        util.assertShape(reshapedValue, [])
+        # util.assertShape(reshapedValue, )
         self.targetQ = self.rewardsPh + self.gamma * (1 - self.terminalsPh) * reshapedValue
         util.assertShape(self.targetQ, [None,])
         self.targetQPh = tf.placeholder(tf.float32, [None,], name="TargetQPh")

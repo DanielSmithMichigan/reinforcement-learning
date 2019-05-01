@@ -2,12 +2,12 @@ import tensorflow as tf
 import numpy as np
 import gym
 
-from PolicyNetwork import PolicyNetwork
-from QNetwork import QNetwork
-from ValueNetwork import ValueNetwork
-import constants
+from .PolicyNetwork import PolicyNetwork
+from .QNetwork import QNetwork
+from .ValueNetwork import ValueNetwork
+from . import constants
 
-from prioritized_experience_replay import PrioritizedExperienceReplay
+from .prioritized_experience_replay import PrioritizedExperienceReplay
 
 
 class Agent:

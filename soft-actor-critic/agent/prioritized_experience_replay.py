@@ -1,6 +1,6 @@
 import numpy as np
 import math
-import constants
+from . import constants
 
 class PrioritizedExperienceReplay:
     def __init__(self,

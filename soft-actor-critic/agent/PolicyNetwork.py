@@ -61,6 +61,8 @@ class PolicyNetwork:
         self.entropyCostOverTime = []
         self.recentEntropy = deque([], 100)
         self.qCostOverTime = []
+        self.explorationOverTime = []
+        self.actionOutputOverTime = []
         self.actionNoise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(numActions), theta=theta, sigma=sigma)
         self.buildNetwork()
         self.buildGraphs()
@@ -73,16 +75,16 @@ class PolicyNetwork:
                 util.assertShape(prevLayer, [None, i])
             self.actionOutputMean = tf.layers.dense(inputs=prevLayer, units=self.numActions)
             util.assertShape(self.actionOutputMean, [None, self.numActions])
-            self.actionOutputVariance = tf.layers.dense(inputs=prevLayer, units=self.numActions)
+            self.actionOutputVariance = tf.abs(tf.layers.dense(inputs=prevLayer, units=self.numActions))
             util.assertShape(self.actionOutputVariance, [None, self.numActions])
             self.randomsPh = tf.placeholder(tf.float32, [None, self.numActions], name=self.name + "_randoms")
             self.explorationPh = tf.placeholder(tf.float32, [None, self.numActions], name=self.name + "_exploration")
-            self.actionsChosen = tf.nn.tanh(self.actionOutputMean + (self.randomsPh * self.actionOutputVariance) + self.explorationPh)
+            self.rawAction = self.actionOutputMean + (self.randomsPh * self.actionOutputVariance)
+            self.actionsChosen = tf.nn.tanh(self.rawAction + self.explorationPh)
             util.assertShape(self.actionsChosen, [None, self.numActions])
-            self.actionSoftmax = tf.nn.softmax(self.actionsChosen, axis=0)
-            util.assertShape(self.actionSoftmax, [None, self.numActions])
-            self.logSoftmax = tf.log(self.actionSoftmax)
-            self.entropy = -1 * self.actionSoftmax * self.logSoftmax
+            self.normalDistribution = tf.distributions.Normal(self.actionOutputMean, self.actionOutputVariance)
+            self.entropy = -self.normalDistribution.log_prob(self.rawAction)
+            util.assertShape(self.entropy, [None, self.numActions])
             self.entropy = tf.reduce_sum(self.entropy)
             util.assertShape(self.entropy, [])
         self.networkParams = tf.trainable_variables(scope=self.name)
@@ -107,6 +109,8 @@ class PolicyNetwork:
         self.actionChoicesGraph.plot(util.getColumn(self.actionsChosenOverTime, 0), label="choice")
         self.actionChoicesGraph.plot(util.getColumn(self.meanOverTime, 0), label="mean")
         self.actionChoicesGraph.plot(util.getColumn(self.varianceOverTime, 0), label="variance")
+        self.actionChoicesGraph.plot(util.getColumn(self.explorationOverTime, 0), label="exploration")
+        self.actionChoicesGraph.plot(util.getColumn(self.actionOutputOverTime, 0), label="actionOutput")
         self.actionChoicesGraph.legend(loc=2)
 
         self.costOverTimeGraph.cla()
@@ -175,24 +179,29 @@ class PolicyNetwork:
         actionNoise = np.reshape(self.actionNoise(), [-1, 1])
         actionNoise = np.zeros((self.batchSize, self.numActions))
         (
+            exploration,
+            rawAction,
             output,
             entropy,
             actionOutputMean,
-            actionOutputVariance,
-            logSoftmax
+            actionOutputVariance
         ) = self.sess.run([
+            self.explorationPh,
+            self.rawAction,
             self.actionsChosen,
             self.entropy,
             self.actionOutputMean,
-            self.actionOutputVariance,
-            self.logSoftmax
+            self.actionOutputVariance
         ], feed_dict={
             self.statePh: [state],
             self.randomsPh: randoms,
             self.explorationPh: actionNoise
         })
-        self.actionsChosenOverTime.append(output[0])
+        # print("MEAN: ",actionOutputMean[0][0]," VARIANCE: ",actionOutputVariance[0][0]," RAW: ",rawAction[0][0]," ENTROPY: ",entropy)
+        self.actionsChosenOverTime.append(rawAction[0])
         self.meanOverTime.append(actionOutputMean[0])
         self.varianceOverTime.append(actionOutputVariance[0])
+        self.explorationOverTime.append(exploration[0])
+        self.actionOutputOverTime.append(output[0])
         return output[0]
 

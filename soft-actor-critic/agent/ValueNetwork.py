@@ -4,8 +4,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 plt.ion()
 
-import util
-import constants
+from . import util
+from . import constants
 
 class ValueNetwork:
     def __init__(self,
