@@ -40,7 +40,7 @@ class ValueNetwork:
             util.assertShape(self.statePh, [None, self.numStateVariables])
             prevLayer = self.statePh
             for i in self.networkSize:
-                prevLayer = tf.layers.dense(inputs=prevLayer, units=i, activation=tf.nn.leaky_relu)
+                prevLayer = tf.layers.dense(inputs=prevLayer, units=i, activation=tf.nn.relu)
                 util.assertShape(prevLayer, [None, i])
             self.value = tf.layers.dense(inputs=prevLayer, units=1)
             util.assertShape(self.value, [None, 1])
@@ -72,8 +72,8 @@ class ValueNetwork:
     def buildTrainingOperation(self):
         self.minQValue = tf.minimum(self.qNetwork1.qValue, self.qNetwork2.qValue)
         util.assertShape(self.minQValue, [None, 1])
-        self.entropyValue = self.entropyCoefficient * self.policyNetwork.entropy
-        util.assertShape(self.entropyValue, [])
+        self.entropyValue = tf.reshape(self.entropyCoefficient * self.policyNetwork.entropy, [-1, 1])
+        util.assertShape(self.entropyValue, [None, 1])
         self.targetValue = self.minQValue + self.entropyValue
         util.assertShape(self.targetValue, [None, 1])
         self.targetValuePh = tf.placeholder(tf.float32, [None, 1], name="TargetValuePlaceholder")
@@ -89,8 +89,7 @@ class ValueNetwork:
     def getTargets(self, memories):
         actionsChosen = self.sess.run(self.policyNetwork.actionsChosen, feed_dict={
             self.policyNetwork.statePh: util.getColumn(memories, constants.STATE),
-            self.policyNetwork.randomsPh: np.random.normal(loc=0.0, scale=1.0, size=(self.batchSize, self.numActions)),
-            self.policyNetwork.explorationPh: np.zeros((self.batchSize, self.numActions))
+            self.policyNetwork.randomsPh: np.random.normal(loc=0.0, scale=1.0, size=(self.batchSize, self.numActions))
         })
         targetValues, entropy = self.sess.run([self.targetValue, self.entropyValue], feed_dict={
             self.qNetwork1.statePh: util.getColumn(memories, constants.STATE),
@@ -98,7 +97,6 @@ class ValueNetwork:
             self.qNetwork2.statePh: util.getColumn(memories, constants.STATE),
             self.qNetwork2.actionsPh: actionsChosen,
             self.policyNetwork.statePh: util.getColumn(memories, constants.STATE),
-            self.policyNetwork.explorationPh: np.zeros((self.batchSize, self.numActions)),
             self.policyNetwork.randomsPh: np.random.normal(loc=0.0, scale=1.0, size=(self.batchSize, self.numActions))
         })
         for i in targetValues:

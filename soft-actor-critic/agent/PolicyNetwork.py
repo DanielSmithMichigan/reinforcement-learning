@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_probability as tfp
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -7,28 +8,6 @@ plt.ion()
 from . import constants
 from . import util
 from collections import deque
-
-class OrnsteinUhlenbeckActionNoise:
-    def __init__(self, mu, sigma=0.3, theta=.15, dt=1e-2, x0=None):
-        self.theta = theta
-        self.mu = mu
-        self.sigma = sigma
-        self.dt = dt
-        self.x0 = x0
-        self.reset()
-
-    def __call__(self):
-        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + \
-                self.sigma * np.sqrt(self.dt) * np.random.normal(size=self.mu.shape)
-        self.x_prev = x
-        return x
-
-    def reset(self):
-        self.x_prev = self.x0 if self.x0 is not None else np.zeros_like(self.mu)
-
-    def __repr__(self):
-        return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
-
 
 class PolicyNetwork:
     def __init__(self,
@@ -53,17 +32,15 @@ class PolicyNetwork:
         self.learningRate = learningRate
         self.maxGradientNorm = maxGradientNorm
         self.batchSize = batchSize
-        self.regTermOverTime = []
-        self.entropyOverTime = []
+        self.regTermOverTime = deque([], 100)
+        self.entropyOverTime = deque([], 100)
         self.actionsChosenOverTime = []
-        self.meanOverTime = []
-        self.varianceOverTime = []
-        self.entropyCostOverTime = []
+        self.meanOverTime = deque([], 100)
+        self.varianceOverTime = deque([], 100)
+        self.entropyCostOverTime = deque([], 100)
         self.recentEntropy = deque([], 100)
-        self.qCostOverTime = []
-        self.explorationOverTime = []
-        self.actionOutputOverTime = []
-        self.actionNoise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(numActions), theta=theta, sigma=sigma)
+        self.qCostOverTime = deque([], 100)
+        self.actionOutputOverTime = deque([], 100)
         self.buildNetwork()
         self.buildGraphs()
     def buildNetwork(self):
@@ -71,22 +48,31 @@ class PolicyNetwork:
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name=self.name + "_state")
             prevLayer = self.statePh
             for i in self.networkSize:
-                prevLayer = tf.layers.dense(inputs=prevLayer, units=i, activation=tf.nn.leaky_relu)
+                prevLayer = tf.layers.dense(inputs=prevLayer, units=i, activation=tf.nn.relu)
                 util.assertShape(prevLayer, [None, i])
             self.actionOutputMean = tf.layers.dense(inputs=prevLayer, units=self.numActions)
             util.assertShape(self.actionOutputMean, [None, self.numActions])
             self.actionOutputVariance = tf.abs(tf.layers.dense(inputs=prevLayer, units=self.numActions))
             util.assertShape(self.actionOutputVariance, [None, self.numActions])
             self.randomsPh = tf.placeholder(tf.float32, [None, self.numActions], name=self.name + "_randoms")
-            self.explorationPh = tf.placeholder(tf.float32, [None, self.numActions], name=self.name + "_exploration")
+            base_distribution = tfp.distributions.MultivariateNormalDiag(
+                loc=tf.zeros_like(self.actionOutputMean),
+                scale_diag=tf.ones_like(self.actionOutputVariance)
+            )
+            distribution = (
+                tfp.distributions.ConditionalTransformedDistribution(
+                    distribution=base_distribution,
+                    bijector=tfp.bijectors.Affine(
+                        shift=self.actionOutputMean,
+                        scale_diag=tf.exp(self.actionOutputVariance)
+                    )
+                )
+            )
             self.rawAction = self.actionOutputMean + (self.randomsPh * self.actionOutputVariance)
-            self.actionsChosen = tf.nn.tanh(self.rawAction + self.explorationPh)
+            self.actionsChosen = tf.nn.tanh(self.rawAction)
             util.assertShape(self.actionsChosen, [None, self.numActions])
-            self.normalDistribution = tf.distributions.Normal(self.actionOutputMean, self.actionOutputVariance)
-            self.entropy = -self.normalDistribution.log_prob(self.rawAction)
-            util.assertShape(self.entropy, [None, self.numActions])
-            self.entropy = tf.reduce_sum(self.entropy)
-            util.assertShape(self.entropy, [])
+            self.entropy = -(distribution.log_prob(self.rawAction))
+            util.assertShape(self.entropy, [None])
         self.networkParams = tf.trainable_variables(scope=self.name)
     def buildGraphs(self):
         self.overview = plt.figure()
@@ -106,11 +92,8 @@ class PolicyNetwork:
 
         self.actionChoicesGraph.cla()
         self.actionChoicesGraph.set_title("Action Choices")
-        self.actionChoicesGraph.plot(util.getColumn(self.actionsChosenOverTime, 0), label="choice")
         self.actionChoicesGraph.plot(util.getColumn(self.meanOverTime, 0), label="mean")
         self.actionChoicesGraph.plot(util.getColumn(self.varianceOverTime, 0), label="variance")
-        self.actionChoicesGraph.plot(util.getColumn(self.explorationOverTime, 0), label="exploration")
-        self.actionChoicesGraph.plot(util.getColumn(self.actionOutputOverTime, 0), label="actionOutput")
         self.actionChoicesGraph.legend(loc=2)
 
         self.costOverTimeGraph.cla()
@@ -143,8 +126,7 @@ class PolicyNetwork:
         randoms = np.random.normal(loc=0.0, scale=1.0, size=(self.batchSize, self.numActions))
         actionsChosen = self.sess.run(self.actionsChosen, feed_dict={
             self.statePh: util.getColumn(memories, constants.STATE),
-            self.randomsPh: randoms,
-            self.explorationPh: np.zeros((self.batchSize, self.numActions))
+            self.randomsPh: randoms
         })
         (
             _,
@@ -166,27 +148,22 @@ class PolicyNetwork:
             self.statePh: util.getColumn(memories, constants.STATE),
             self.qNetwork.statePh: util.getColumn(memories, constants.STATE),
             self.qNetwork.actionsPh: actionsChosen,
-            self.randomsPh: randoms,
-            self.explorationPh: np.zeros((self.batchSize, self.numActions))
+            self.randomsPh: randoms
         })
         self.qCostOverTime.append(abs(qCost))
         self.entropyCostOverTime.append(abs(entropyCost))
-        self.recentEntropy.append(entropy)
+        self.recentEntropy.append(np.mean(entropy))
         self.regTermOverTime.append(gradientNorm)
-        self.entropyOverTime.append(entropy)
+        self.entropyOverTime.append(np.mean(entropy))
     def getAction(self, state):
         randoms = np.random.normal(loc=0.0, scale=1.0, size=(1, self.numActions))
-        actionNoise = np.reshape(self.actionNoise(), [-1, 1])
-        actionNoise = np.zeros((self.batchSize, self.numActions))
         (
-            exploration,
             rawAction,
             output,
             entropy,
             actionOutputMean,
             actionOutputVariance
         ) = self.sess.run([
-            self.explorationPh,
             self.rawAction,
             self.actionsChosen,
             self.entropy,
@@ -194,14 +171,12 @@ class PolicyNetwork:
             self.actionOutputVariance
         ], feed_dict={
             self.statePh: [state],
-            self.randomsPh: randoms,
-            self.explorationPh: actionNoise
+            self.randomsPh: randoms
         })
         # print("MEAN: ",actionOutputMean[0][0]," VARIANCE: ",actionOutputVariance[0][0]," RAW: ",rawAction[0][0]," ENTROPY: ",entropy)
         self.actionsChosenOverTime.append(rawAction[0])
         self.meanOverTime.append(actionOutputMean[0])
         self.varianceOverTime.append(actionOutputVariance[0])
-        self.explorationOverTime.append(exploration[0])
         self.actionOutputOverTime.append(output[0])
         return output[0]
 

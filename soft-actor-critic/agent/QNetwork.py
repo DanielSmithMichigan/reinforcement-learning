@@ -34,15 +34,15 @@ class QNetwork:
     def buildNetwork(self):
         with tf.variable_scope(self.name):
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables])
-            self.stateEmbedding = tf.layers.dense(inputs=self.statePh, units=self.networkSize[0], activation=tf.nn.leaky_relu)
+            self.stateEmbedding = tf.layers.dense(inputs=self.statePh, units=self.networkSize[0], activation=tf.nn.relu)
             util.assertShape(self.stateEmbedding, [None, self.networkSize[0]])
             self.actionsPh = tf.placeholder(tf.float32, [None, self.numActions])
-            self.actionEmbedding = tf.layers.dense(inputs=self.actionsPh, units=self.networkSize[0], activation=tf.nn.leaky_relu)
+            self.actionEmbedding = tf.layers.dense(inputs=self.actionsPh, units=self.networkSize[0], activation=tf.nn.relu)
             util.assertShape(self.actionEmbedding, [None, self.networkSize[0]])
             prevLayer = tf.concat([self.stateEmbedding, self.actionEmbedding], axis=1)
             util.assertShape(prevLayer, [None, self.networkSize[0] * 2])
             for i in range(1, len(self.networkSize)):
-                prevLayer = tf.layers.dense(inputs=prevLayer, units=self.networkSize[i], activation=tf.nn.leaky_relu, name=self.name + "_dense_"+str(i))
+                prevLayer = tf.layers.dense(inputs=prevLayer, units=self.networkSize[i], activation=tf.nn.relu, name=self.name + "_dense_"+str(i))
                 util.assertShape(prevLayer, [None, self.networkSize[i]])
             self.qValue = tf.layers.dense(inputs=prevLayer, units=1)
             util.assertShape(self.qValue, [None, 1])
@@ -90,11 +90,13 @@ class QNetwork:
         ) = tf.clip_by_global_norm(gradients, self.maxGradientNorm)
         self.trainingOperation = self.optimizer.apply_gradients(zip(self.gradients, variables))
     def getTargets(self, memories):
-        return self.sess.run(self.targetQ, feed_dict={
-            self.rewardsPh: util.getColumn(memories, constants.REWARD),
+        rewards = util.getColumn(memories, constants.REWARD)
+        targets = self.sess.run(self.targetQ, feed_dict={
+            self.rewardsPh: rewards,
             self.terminalsPh: util.getColumn(memories, constants.IS_TERMINAL),
             self.valueNetwork.statePh: util.getColumn(memories, constants.NEXT_STATE)
         })
+        return targets
     def trainAgainst(self, memories, targets):
         loss, _ = self.sess.run([self.loss, self.trainingOperation], feed_dict={
             self.targetQPh: targets,

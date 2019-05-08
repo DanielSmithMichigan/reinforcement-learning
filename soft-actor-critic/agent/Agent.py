@@ -140,7 +140,7 @@ class Agent:
             self.env.render()
         memoryEntry = np.array(np.zeros(constants.NUM_MEMORY_ENTRIES), dtype=object)
         memoryEntry[constants.STATE] = self.state
-        memoryEntry[constants.ACTION] = actionsChosen
+        memoryEntry[constants.ACTION] = actionsChosen    
         memoryEntry[constants.REWARD] = reward * self.rewardScaling
         memoryEntry[constants.NEXT_STATE] = nextState
         memoryEntry[constants.GAMMA] = self.gamma if not done else 0
