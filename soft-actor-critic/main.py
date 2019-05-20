@@ -6,10 +6,10 @@ agent = Agent(
     policyNetworkSize=[256, 256],
     qNetworkSize=[256, 256],
     valueNetworkSize=[256, 256],
-    entropyCoefficient=0.1,
-    valueNetworkLearningRate=3e-4,
-    policyNetworkLearningRate=3e-4,
-    qNetworkLearningRate=3e-4,
+    entropyCoefficient=1.5e-3,
+    valueNetworkLearningRate=4e-3,
+    policyNetworkLearningRate=4e-3,
+    qNetworkLearningRate=4e-3,
     tau=0.005,
     gamma=0.99,
     maxMemoryLength=int(1e6),
@@ -20,11 +20,11 @@ agent = Agent(
     maxSteps=1024,
     minStepsBeforeTraining=1024,
     rewardScaling=0.1,
-    actionScaling=2.0,
+    actionScaling=4.0,
+    actionShift=0.0,
     stepsPerUpdate=1,
-    render=False,
-    theta=0.15,
-    sigma=0.2
+    render=True,
+    weightRegularizationConstant=0.03
 )
 
 agent.execute()

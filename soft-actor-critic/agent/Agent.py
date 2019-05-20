@@ -1,6 +1,12 @@
 import tensorflow as tf
 import numpy as np
 import gym
+import time
+from collections import deque
+
+import matplotlib
+import matplotlib.pyplot as plt
+plt.ion()
 
 from .PolicyNetwork import PolicyNetwork
 from .QNetwork import QNetwork
@@ -33,8 +39,8 @@ class Agent:
             render,
             minStepsBeforeTraining,
             actionScaling,
-            theta,
-            sigma
+            actionShift,
+            weightRegularizationConstant
         ):
         self.numStateVariables = 3
         self.numActions = 1
@@ -97,14 +103,17 @@ class Agent:
             learningRate=policyNetworkLearningRate,
             maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
-            theta=theta,
-            sigma=sigma
+            weightRegularizationConstant=weightRegularizationConstant
         )
 
         self.qNetwork1.setValueNetwork(self.targetValueNetwork)
+        self.qNetwork1.setPolicyNetwork(self.policyNetwork)
+        self.qNetwork1.buildNetwork()
         self.qNetwork1.buildTrainingOperation()
 
         self.qNetwork2.setValueNetwork(self.targetValueNetwork)
+        self.qNetwork2.setPolicyNetwork(self.policyNetwork)
+        self.qNetwork2.buildNetwork()
         self.qNetwork2.buildTrainingOperation()
 
         self.learnedValueNetwork.setNetworks(self.policyNetwork, self.qNetwork1, self.qNetwork2)
@@ -131,16 +140,35 @@ class Agent:
         self.render = render
         self.minStepsBeforeTraining = minStepsBeforeTraining
         self.actionScaling = actionScaling
+        self.actionShift = actionShift
+        self.buildGraphs()
+        self.getQTargetsOverTime = deque([], 400)
+        self.getValueTargetsOverTime = deque([], 400)
+        self.trainQOverTime = deque([], 400)
+        self.trainValueOverTime = deque([], 400)
+        self.trainPolicyOverTime = deque([], 400)
+        self.rewardsOverTime = deque([], 400)
+    def buildGraphs(self):
+        self.overview = plt.figure()
+        self.overview.suptitle(self.name)
+        self.timersPlot = self.overview.add_subplot(2, 1, 1)
+        self.rewardsPlot = self.overview.add_subplot(2, 1, 2)
     def goToNextState(self):
-        actionsChosen = self.policyNetwork.getAction(self.state)
+        (
+            actionsChosen,
+            logScaleActionVariance,
+            logProb,
+            entropy
+        ) = self.policyNetwork.getAction(self.state)
         self.qNetwork1.storeAssessment(self.state, actionsChosen)
         self.qNetwork2.storeAssessment(self.state, actionsChosen)
-        nextState, reward, done, info = self.env.step(actionsChosen * self.actionScaling)
+        nextState, reward, done, info = self.env.step((actionsChosen + self.actionShift) * self.actionScaling)
         if (self.render):
             self.env.render()
         memoryEntry = np.array(np.zeros(constants.NUM_MEMORY_ENTRIES), dtype=object)
         memoryEntry[constants.STATE] = self.state
-        memoryEntry[constants.ACTION] = actionsChosen    
+        memoryEntry[constants.ACTION] = actionsChosen
+        # memoryEntry[constants.REWARD] = np.reshape(-abs(actionsChosen - .1), [])
         memoryEntry[constants.REWARD] = reward * self.rewardScaling
         memoryEntry[constants.NEXT_STATE] = nextState
         memoryEntry[constants.GAMMA] = self.gamma if not done else 0
@@ -154,19 +182,48 @@ class Agent:
         return done
     def train(self):
         trainingMemories = self.memoryBuffer.getMemoryBatch()
+
+        start = time.time()
         qOneTargets = self.qNetwork1.getTargets(trainingMemories)
         qTwoTargets = self.qNetwork2.getTargets(trainingMemories)
+        self.getQTargetsOverTime.append(time.time() - start)
+
+        start = time.time()
         valueTargets = self.targetValueNetwork.getTargets(trainingMemories)
+        self.getValueTargetsOverTime.append(time.time() - start)
+
+        start = time.time()
         self.qNetwork1.trainAgainst(trainingMemories, qOneTargets)
         self.qNetwork2.trainAgainst(trainingMemories, qTwoTargets)
+        self.trainQOverTime.append(time.time() - start)
+
+        start = time.time()
         self.learnedValueNetwork.trainAgainst(trainingMemories, valueTargets)
-        self.policyNetwork.trainAgainst(trainingMemories)
         self.sess.run(self.softCopyLearnedNetwork)
+        self.trainValueOverTime.append(time.time() - start)
+
+        start = time.time()
+        self.policyNetwork.trainAgainst(trainingMemories)
+        self.trainPolicyOverTime.append(time.time() - start)
     def updateGraphs(self):
         self.qNetwork1.updateGraphs()
         self.qNetwork2.updateGraphs()
         self.learnedValueNetwork.updateGraphs()
+        # self.targetValueNetwork.updateGraphs()
         self.policyNetwork.updateGraphs()
+
+        self.timersPlot.cla()
+        self.timersPlot.set_title("Timing")
+        self.timersPlot.plot(self.getQTargetsOverTime, label="Q Targets")
+        self.timersPlot.plot(self.getValueTargetsOverTime, label="Value Targets")
+        self.timersPlot.plot(self.trainQOverTime, label="Train Q")
+        self.timersPlot.plot(self.trainValueOverTime, label="Train Value")
+        self.timersPlot.plot(self.trainPolicyOverTime, label="Train Policy")
+        self.timersPlot.legend(loc=2)
+
+        self.rewardsPlot.cla()
+        self.rewardsPlot.set_title("Rewards")
+        self.rewardsPlot.plot(self.rewardsOverTime, label="Rewards")
     def execute(self):
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(self.copyLearnedNetwork)
@@ -179,7 +236,7 @@ class Agent:
                 # print("Done: ",done)
                 # if done:
                 #     break
-            print("Episode Reward: ",self.totalEpisodeReward)
+            self.rewardsOverTime.append(self.totalEpisodeReward)
             self.updateGraphs()
 
 

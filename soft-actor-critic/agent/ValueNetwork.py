@@ -72,32 +72,30 @@ class ValueNetwork:
     def buildTrainingOperation(self):
         self.minQValue = tf.minimum(self.qNetwork1.qValue, self.qNetwork2.qValue)
         util.assertShape(self.minQValue, [None, 1])
-        self.entropyValue = tf.reshape(self.entropyCoefficient * self.policyNetwork.entropy, [-1, 1])
+        self.entropyValue = tf.reshape(self.entropyCoefficient * -self.policyNetwork.logProb, [-1, 1])
         util.assertShape(self.entropyValue, [None, 1])
-        self.targetValue = self.minQValue + self.entropyValue
+        self.targetValue = self.minQValue - self.entropyValue
         util.assertShape(self.targetValue, [None, 1])
         self.targetValuePh = tf.placeholder(tf.float32, [None, 1], name="TargetValuePlaceholder")
         self.loss = tf.reduce_mean(tf.pow(self.value - self.targetValuePh, 2))
         util.assertShape(self.loss, [])
         self.optimizer = tf.train.AdamOptimizer(self.learningRate)
-        gradients, variables = zip(*self.optimizer.compute_gradients(self.loss))
+        gradients, variables = zip(
+            *self.optimizer.compute_gradients(
+                self.loss,
+                var_list=self.networkParams
+            )
+        )
         (
             self.gradients,
             self.gradientNorm
         ) = tf.clip_by_global_norm(gradients, self.maxGradientNorm)
         self.trainingOperation = self.optimizer.apply_gradients(zip(self.gradients, variables))
     def getTargets(self, memories):
-        actionsChosen = self.sess.run(self.policyNetwork.actionsChosen, feed_dict={
-            self.policyNetwork.statePh: util.getColumn(memories, constants.STATE),
-            self.policyNetwork.randomsPh: np.random.normal(loc=0.0, scale=1.0, size=(self.batchSize, self.numActions))
-        })
         targetValues, entropy = self.sess.run([self.targetValue, self.entropyValue], feed_dict={
             self.qNetwork1.statePh: util.getColumn(memories, constants.STATE),
-            self.qNetwork1.actionsPh: actionsChosen,
             self.qNetwork2.statePh: util.getColumn(memories, constants.STATE),
-            self.qNetwork2.actionsPh: actionsChosen,
-            self.policyNetwork.statePh: util.getColumn(memories, constants.STATE),
-            self.policyNetwork.randomsPh: np.random.normal(loc=0.0, scale=1.0, size=(self.batchSize, self.numActions))
+            self.policyNetwork.statePh: util.getColumn(memories, constants.STATE)
         })
         for i in targetValues:
             self.targetValueOverTime.append(i[0])

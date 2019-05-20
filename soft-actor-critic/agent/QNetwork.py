@@ -29,20 +29,16 @@ class QNetwork:
         self.storedTargets = None
         self.lossOverTime = []
         self.assessmentsOverTime = []
-        self.buildNetwork()
         self.buildGraphs()
     def buildNetwork(self):
         with tf.variable_scope(self.name):
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables])
-            self.stateEmbedding = tf.layers.dense(inputs=self.statePh, units=self.networkSize[0], activation=tf.nn.relu)
-            util.assertShape(self.stateEmbedding, [None, self.networkSize[0]])
-            self.actionsPh = tf.placeholder(tf.float32, [None, self.numActions])
-            self.actionEmbedding = tf.layers.dense(inputs=self.actionsPh, units=self.networkSize[0], activation=tf.nn.relu)
-            util.assertShape(self.actionEmbedding, [None, self.networkSize[0]])
+            self.stateEmbedding = tf.layers.dense(inputs=self.statePh, units=self.networkSize[0], activation=tf.nn.relu, name=self.name+"_state_embedding")
+            self.actionsPh = self.policyNetwork.actionsChosen
+            self.actionEmbedding = tf.layers.dense(inputs=self.actionsPh, units=self.networkSize[0], activation=tf.nn.relu, name=self.name+"_actions_embedding")
             prevLayer = tf.concat([self.stateEmbedding, self.actionEmbedding], axis=1)
-            util.assertShape(prevLayer, [None, self.networkSize[0] * 2])
             for i in range(1, len(self.networkSize)):
-                prevLayer = tf.layers.dense(inputs=prevLayer, units=self.networkSize[i], activation=tf.nn.relu, name=self.name + "_dense_"+str(i))
+                prevLayer = tf.layers.dense(inputs=prevLayer, units=self.networkSize[i], activation=tf.nn.relu, name=self.name + "_dense_" + str(i))
                 util.assertShape(prevLayer, [None, self.networkSize[i]])
             self.qValue = tf.layers.dense(inputs=prevLayer, units=1)
             util.assertShape(self.qValue, [None, 1])
@@ -70,6 +66,8 @@ class QNetwork:
         self.assessmentsOverTime.append(assessment[0])
     def setValueNetwork(self, valueNetwork):
         self.valueNetwork = valueNetwork
+    def setPolicyNetwork(self, policyNetwork):
+        self.policyNetwork = policyNetwork
     def buildTrainingOperation(self):
         self.rewardsPh = tf.placeholder(tf.float32, [None])
         # util.assertShape(self.rewardsPh, [])
@@ -83,7 +81,12 @@ class QNetwork:
         self.loss = tf.reduce_mean(tf.pow(self.qValue - self.targetQPh, 2))
         util.assertShape(self.loss, [])
         self.optimizer = tf.train.AdamOptimizer(self.learningRate)
-        gradients, variables = zip(*self.optimizer.compute_gradients(self.loss))
+        gradients, variables = zip(
+            *self.optimizer.compute_gradients(
+                self.loss,
+                var_list=self.networkParams
+            )
+        )
         (
             self.gradients,
             self.gradientNorm
@@ -94,14 +97,16 @@ class QNetwork:
         targets = self.sess.run(self.targetQ, feed_dict={
             self.rewardsPh: rewards,
             self.terminalsPh: util.getColumn(memories, constants.IS_TERMINAL),
-            self.valueNetwork.statePh: util.getColumn(memories, constants.NEXT_STATE)
+            self.valueNetwork.statePh: util.getColumn(memories, constants.NEXT_STATE),
+            self.policyNetwork.statePh: util.getColumn(memories, constants.STATE)
         })
         return targets
     def trainAgainst(self, memories, targets):
         loss, _ = self.sess.run([self.loss, self.trainingOperation], feed_dict={
             self.targetQPh: targets,
             self.statePh: util.getColumn(memories, constants.STATE),
-            self.actionsPh: util.getColumn(memories, constants.ACTION)
+            self.actionsPh: util.getColumn(memories, constants.ACTION),
+            self.policyNetwork.statePh: util.getColumn(memories, constants.STATE)
         })
         self.lossOverTime.append(loss)
 
