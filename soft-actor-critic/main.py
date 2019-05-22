@@ -17,14 +17,17 @@ agent = Agent(
     batchSize=256,
     maxGradientNorm=5,
     maxEpisodes=1024,
-    maxSteps=1024,
+    trainSteps=1024,
     minStepsBeforeTraining=1024,
     rewardScaling=0.1,
     actionScaling=4.0,
     actionShift=0.0,
     stepsPerUpdate=1,
-    render=True,
-    weightRegularizationConstant=0.03
+    render=False,
+    showGraphs=False,
+    weightRegularizationConstant=0.03,
+    testSteps=1024,
+    maxMinutes=1
 )
 
-agent.execute()
+print("Total Reward: "+str(agent.execute()))

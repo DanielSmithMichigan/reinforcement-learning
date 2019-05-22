@@ -1,11 +1,9 @@
 import tensorflow as tf
-import tensorflow_probability as tfp
 import math
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import time
-plt.ion()
 
 from . import constants
 from . import util
@@ -42,7 +40,8 @@ class PolicyNetwork:
             learningRate,
             maxGradientNorm,
             batchSize,
-            weightRegularizationConstant
+            weightRegularizationConstant,
+            showGraphs
         ):
         self.sess = sess
         self.name = name
@@ -65,7 +64,8 @@ class PolicyNetwork:
         self.regLossOverTime = deque([], 100)
         self.weightRegularizationConstant = weightRegularizationConstant
         self.buildNetwork()
-        self.buildGraphs()
+        if showGraphs:
+            self.buildGraphs()
     def buildNetwork(self):
         with tf.variable_scope(self.name):
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name=self.name + "_state")
@@ -85,6 +85,7 @@ class PolicyNetwork:
             self.logProb = gaussian_likelihood(self.rawAction, self.actionMean, self.logScaleActionVariance) - tf.reduce_sum(tf.log(clip_but_pass_gradient(1 - self.actionsChosen ** 2, lower=0, upper=1) + EPS), axis=1)
         self.networkParams = tf.trainable_variables(scope=self.name)
     def buildGraphs(self):
+        plt.ion()
         self.overview = plt.figure()
         self.overview.suptitle(self.name)
         self.regTermGraph = self.overview.add_subplot(4, 1, 1)

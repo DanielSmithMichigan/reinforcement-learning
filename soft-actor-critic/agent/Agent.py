@@ -6,7 +6,7 @@ from collections import deque
 
 import matplotlib
 import matplotlib.pyplot as plt
-plt.ion()
+import time
 
 from .PolicyNetwork import PolicyNetwork
 from .QNetwork import QNetwork
@@ -33,19 +33,23 @@ class Agent:
             batchSize,
             maxGradientNorm,
             maxEpisodes,
-            maxSteps,
+            trainSteps,
             rewardScaling,
             stepsPerUpdate,
             render,
+            showGraphs,
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
-            weightRegularizationConstant
+            weightRegularizationConstant,
+            testSteps,
+            maxMinutes
         ):
         self.numStateVariables = 3
         self.numActions = 1
         self.env = gym.make('Pendulum-v0')
         self.sess = tf.Session()
+        self.startTime = time.time()
 
         self.learnedValueNetwork = ValueNetwork(
             sess=self.sess,
@@ -56,7 +60,8 @@ class Agent:
             learningRate=valueNetworkLearningRate,
             maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
-            numActions=self.numActions
+            numActions=self.numActions,
+            showGraphs=showGraphs
         )
         self.targetValueNetwork = ValueNetwork(
             name="TargetValueNetwork_"+name,
@@ -67,7 +72,8 @@ class Agent:
             learningRate=valueNetworkLearningRate,
             maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
-            numActions=self.numActions
+            numActions=self.numActions,
+            showGraphs=showGraphs
         )
         self.copyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork.networkParams, 1)
         self.softCopyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork.networkParams, tau)
@@ -80,7 +86,8 @@ class Agent:
             networkSize=qNetworkSize,
             gamma=gamma,
             learningRate=qNetworkLearningRate,
-            maxGradientNorm=maxGradientNorm
+            maxGradientNorm=maxGradientNorm,
+            showGraphs=showGraphs
         )
         self.qNetwork2 = QNetwork(
             sess=self.sess,
@@ -90,7 +97,8 @@ class Agent:
             networkSize=qNetworkSize,
             gamma=gamma,
             learningRate=qNetworkLearningRate,
-            maxGradientNorm=maxGradientNorm
+            maxGradientNorm=maxGradientNorm,
+            showGraphs=showGraphs
         )
 
         self.policyNetwork = PolicyNetwork(
@@ -103,7 +111,8 @@ class Agent:
             learningRate=policyNetworkLearningRate,
             maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
-            weightRegularizationConstant=weightRegularizationConstant
+            weightRegularizationConstant=weightRegularizationConstant,
+            showGraphs=showGraphs
         )
 
         self.qNetwork1.setValueNetwork(self.targetValueNetwork)
@@ -133,15 +142,19 @@ class Agent:
 
         self.name = name
         self.maxEpisodes = maxEpisodes
-        self.maxSteps = maxSteps
+        self.trainSteps = trainSteps
         self.rewardScaling = rewardScaling
         self.gamma = gamma
         self.stepsPerUpdate = stepsPerUpdate
         self.render = render
+        self.showGraphs = showGraphs
         self.minStepsBeforeTraining = minStepsBeforeTraining
         self.actionScaling = actionScaling
         self.actionShift = actionShift
-        self.buildGraphs()
+        self.testSteps = testSteps
+        self.maxMinutes = maxMinutes
+        if showGraphs:
+            self.buildGraphs()
         self.getQTargetsOverTime = deque([], 400)
         self.getValueTargetsOverTime = deque([], 400)
         self.trainQOverTime = deque([], 400)
@@ -149,10 +162,13 @@ class Agent:
         self.trainPolicyOverTime = deque([], 400)
         self.rewardsOverTime = deque([], 400)
     def buildGraphs(self):
+        plt.ion()
         self.overview = plt.figure()
         self.overview.suptitle(self.name)
         self.timersPlot = self.overview.add_subplot(2, 1, 1)
         self.rewardsPlot = self.overview.add_subplot(2, 1, 2)
+    def outOfTime(self):
+        return time.time() > self.startTime + (self.maxMinutes * 60)
     def goToNextState(self):
         (
             actionsChosen,
@@ -229,14 +245,20 @@ class Agent:
         self.sess.run(self.copyLearnedNetwork)
         self.globalStep = 0
         for episodeNum in range(self.maxEpisodes):
+            if self.outOfTime():
+                break
             self.state = self.env.reset()
             self.totalEpisodeReward = 0
-            for stepNum in range(self.maxSteps):
-                done = self.goToNextState()
-                # print("Done: ",done)
-                # if done:
-                #     break
+            for stepNum in range(self.trainSteps):
+                self.goToNextState()
             self.rewardsOverTime.append(self.totalEpisodeReward)
-            self.updateGraphs()
+            if self.showGraphs:
+                self.updateGraphs()
+        self.state = self.env.reset()
+        self.totalEpisodeReward = 0
+        for stepNum in range(self.testSteps):
+            self.goToNextState()
+        return self.totalEpisodeReward
+            
 
 

@@ -2,7 +2,6 @@ import tensorflow as tf
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-plt.ion()
 
 from . import util
 from . import constants
@@ -16,7 +15,8 @@ class QNetwork:
             networkSize,
             gamma,
             learningRate,
-            maxGradientNorm
+            maxGradientNorm,
+            showGraphs
         ):
         self.sess = sess
         self.name = name
@@ -29,7 +29,8 @@ class QNetwork:
         self.storedTargets = None
         self.lossOverTime = []
         self.assessmentsOverTime = []
-        self.buildGraphs()
+        if showGraphs:
+            self.buildGraphs()
     def buildNetwork(self):
         with tf.variable_scope(self.name):
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables])
@@ -44,6 +45,7 @@ class QNetwork:
             util.assertShape(self.qValue, [None, 1])
         self.networkParams = tf.trainable_variables(scope=self.name)
     def buildGraphs(self):
+        plt.ion()
         self.overview = plt.figure()
         self.overview.suptitle(self.name)
         self.lossGraph = self.overview.add_subplot(2, 1, 1)
