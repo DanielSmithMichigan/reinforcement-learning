@@ -39,37 +39,41 @@ learningRate = 10 ** nextTest.args[1]
 rewardScaling = 10 ** nextTest.args[2]
 actionScaling = 10 ** nextTest.args[3]
 weightRegularizationConstant = 10 ** nextTest.args[4]
+result = -20000
+try:
+    agent = Agent(
+        name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
+        policyNetworkSize=[64, 64],
+        qNetworkSize=[64, 64],
+        valueNetworkSize=[64, 64],
+        entropyCoefficient=entropyCoefficient,
+        valueNetworkLearningRate=learningRate,
+        policyNetworkLearningRate=learningRate,
+        qNetworkLearningRate=learningRate,
+        tau=0.005,
+        gamma=0.99,
+        maxMemoryLength=int(1e6),
+        priorityExponent=0,
+        batchSize=256,
+        maxGradientNorm=5,
+        maxEpisodes=1024,
+        trainSteps=1024,
+        minStepsBeforeTraining=4096,
+        rewardScaling=rewardScaling,
+        actionScaling=actionScaling,
+        actionShift=0.0,
+        stepsPerUpdate=1,
+        render=False,
+        showGraphs=False,
+        weightRegularizationConstant=weightRegularizationConstant,
+        testSteps=1024,
+        maxMinutes=15
+    )
 
-agent = Agent(
-    name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
-    policyNetworkSize=[64, 64],
-    qNetworkSize=[64, 64],
-    valueNetworkSize=[64, 64],
-    entropyCoefficient=entropyCoefficient,
-    valueNetworkLearningRate=learningRate,
-    policyNetworkLearningRate=learningRate,
-    qNetworkLearningRate=learningRate,
-    tau=0.005,
-    gamma=0.99,
-    maxMemoryLength=int(1e6),
-    priorityExponent=0,
-    batchSize=256,
-    maxGradientNorm=5,
-    maxEpisodes=1024,
-    trainSteps=1024,
-    minStepsBeforeTraining=4096,
-    rewardScaling=rewardScaling,
-    actionScaling=actionScaling,
-    actionShift=0.0,
-    stepsPerUpdate=1,
-    render=False,
-    showGraphs=False,
-    weightRegularizationConstant=weightRegularizationConstant,
-    testSteps=1024,
-    maxMinutes=15
-)
-
-result = agent.execute()
+    result = agent.execute()
+except:
+    print("Error evaluating parameters")
+    result = -20000
 cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}')".format(
         experimentName,
         entropyCoefficient,
