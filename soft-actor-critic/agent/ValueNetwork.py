@@ -74,7 +74,7 @@ class ValueNetwork:
     def buildTrainingOperation(self):
         self.minQValue = tf.minimum(self.qNetwork1.qValue, self.qNetwork2.qValue)
         util.assertShape(self.minQValue, [None, 1])
-        self.entropyValue = tf.reshape(self.entropyCoefficient * -self.policyNetwork.logProb, [-1, 1])
+        self.entropyValue = tf.reshape(self.entropyCoefficient * self.policyNetwork.logProb, [-1, 1])
         util.assertShape(self.entropyValue, [None, 1])
         self.targetValue = self.minQValue - self.entropyValue
         util.assertShape(self.targetValue, [None, 1])
