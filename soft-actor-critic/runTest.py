@@ -17,16 +17,14 @@ rewardScalingArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2)
 actionScalingArg = ng.instrumentation.variables.Gaussian(mean=-1, std=1)
 weightRegularizationConstantArg = ng.instrumentation.variables.Gaussian(mean=-2, std=1)
 
-value = ng.instrumentation.variables.Gaussian(mean=-5000, std=2000)
-
-instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, actionScalingArg, weightRegularizationConstantArg, value=value)
+instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, actionScalingArg, weightRegularizationConstantArg)
 optimizer = ng.optimizers.registry["TBPSA"](instrumentation=instrumentation, budget=os.environ['BUDGET'])
 
 cur.execute("select x1, x2, x3, x4, x5, y from experiments where label = '"+experimentName+"'")
 result = cur.fetchall()
 for row in result:
     candidate = optimizer.create_candidate.from_call(float(row[0]), float(row[1]), float(row[2]), float(row[3]), float(row[4]))
-    optimizer.tell(candidate, float(row[5]))
+    optimizer.tell(candidate, -float(row[5]))
 
 nextTest = optimizer.ask()
 
