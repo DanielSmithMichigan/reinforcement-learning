@@ -11,13 +11,13 @@ cur = db.cursor()
 experimentName = "soft-actor-critic-general"
 env = gym.make('LunarLander-v2')
 
-entropyCoefficientArg = ng.var.Gaussian(mean=-2, std=2)
-learningRateArg = ng.var.Gaussian(mean=-3, std=2)
-rewardScalingArg = ng.var.Gaussian(mean=-3, std=2)
-actionScalingArg = ng.var.Gaussian(mean=-1, std=1)
-weightRegularizationConstantArg = ng.var.Gaussian(mean=-2, std=1)
+entropyCoefficientArg = ng.variables.Gaussian(mean=-2, std=2)
+learningRateArg = ng.variables.Gaussian(mean=-3, std=2)
+rewardScalingArg = ng.variables.Gaussian(mean=-3, std=2)
+actionScalingArg = ng.variables.Gaussian(mean=-1, std=1)
+weightRegularizationConstantArg = ng.variables.Gaussian(mean=-2, std=1)
 
-value = ng.var.Gaussian(mean=-5000, std=2000)
+value = ng.variables.Gaussian(mean=-5000, std=2000)
 
 instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, actionScalingArg, weightRegularizationConstantArg, value=value)
 optimizer = ng.optimizers.registry["TBPSA"](instrumentation=instrumentation, budget=os.environ['BUDGET'])
