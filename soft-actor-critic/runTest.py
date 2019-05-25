@@ -62,7 +62,7 @@ agent = Agent(
     showGraphs=False,
     weightRegularizationConstant=weightRegularizationConstant,
     testSteps=1024,
-    maxMinutes=5
+    maxMinutes=15
 )
 
 result = agent.execute()
