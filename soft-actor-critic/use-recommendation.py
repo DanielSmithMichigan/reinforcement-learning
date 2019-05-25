@@ -8,7 +8,7 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "soft-actor-critic-fixed-entropy"
+experimentName = "soft-actor-critic-400"
 
 entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
 learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2)
@@ -31,13 +31,15 @@ for row in result:
     )
     optimizer.tell(candidate, -float(row[5]))
 
-nextTest = optimizer.ask()
+recommendation = optimizer.provide_recommendation()
+cur.close()
+db.close()
 
-entropyCoefficient = 10 ** nextTest.args[0]
-learningRate = 10 ** nextTest.args[1]
-rewardScaling = 10 ** nextTest.args[2]
-actionScaling = 10 ** nextTest.args[3]
-weightRegularizationConstant = 10 ** nextTest.args[4]
+entropyCoefficient = 10 ** recommendation.args[0]
+learningRate = 10 ** recommendation.args[1]
+rewardScaling = 10 ** recommendation.args[2]
+actionScaling = 10 ** recommendation.args[3]
+weightRegularizationConstant = 10 ** recommendation.args[4]
 result = -20000
 try:
     agent = Agent(
@@ -62,32 +64,15 @@ try:
         actionScaling=actionScaling,
         actionShift=0.0,
         stepsPerUpdate=1,
-        render=False,
-        showGraphs=False,
+        render=True,
+        showGraphs=True,
         weightRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
         maxMinutes=15
     )
 
     result = agent.execute()
+    print("Result: "+result)
 except:
     print("Error evaluating parameters")
     result = -20000
-cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}')".format(
-        experimentName,
-        entropyCoefficient,
-        learningRate,
-        rewardScaling,
-        actionScaling,
-        weightRegularizationConstant,
-        0,
-        0,
-        0,
-        0,
-        0,
-        result
-    )
-)
-db.commit()
-cur.close()
-db.close()

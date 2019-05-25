@@ -6,7 +6,7 @@ agent = Agent(
     policyNetworkSize=[64, 64],
     qNetworkSize=[64, 64],
     valueNetworkSize=[64, 64],
-    entropyCoefficient=1.5e-3,
+    entropyCoefficient=6e-3,
     valueNetworkLearningRate=4e-3,
     policyNetworkLearningRate=4e-3,
     qNetworkLearningRate=4e-3,
@@ -25,9 +25,9 @@ agent = Agent(
     stepsPerUpdate=1,
     render=True,
     showGraphs=True,
-    weightRegularizationConstant=0.03,
+    weightRegularizationConstant=0.09,
     testSteps=1024,
-    maxMinutes=1
+    maxMinutes=15
 )
 
 print("Total Reward: "+str(agent.execute()))
