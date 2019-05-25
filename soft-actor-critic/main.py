@@ -3,9 +3,9 @@ from agent.Agent import Agent
 
 agent = Agent(
     name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
-    policyNetworkSize=[256, 256],
-    qNetworkSize=[256, 256],
-    valueNetworkSize=[256, 256],
+    policyNetworkSize=[64, 64],
+    qNetworkSize=[64, 64],
+    valueNetworkSize=[64, 64],
     entropyCoefficient=1.5e-3,
     valueNetworkLearningRate=4e-3,
     policyNetworkLearningRate=4e-3,
