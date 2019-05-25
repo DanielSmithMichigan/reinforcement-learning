@@ -8,7 +8,7 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "soft-actor-critic-200"
+experimentName = "soft-actor-critic-400"
 env = gym.make('LunarLander-v2')
 
 entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
