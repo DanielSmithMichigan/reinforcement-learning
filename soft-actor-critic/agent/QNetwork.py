@@ -100,7 +100,7 @@ class QNetwork:
             self.rewardsPh: rewards,
             self.terminalsPh: util.getColumn(memories, constants.IS_TERMINAL),
             self.valueNetwork.statePh: util.getColumn(memories, constants.NEXT_STATE),
-            self.policyNetwork.statePh: util.getColumn(memories, constants.STATE)
+            self.policyNetwork.statePh: util.getColumn(memories, constants.NEXT_STATE)
         })
         return targets
     def trainAgainst(self, memories, targets):
