@@ -12,8 +12,8 @@ experimentName = "soft-actor-critic-fixed-entropy"
 
 entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
 learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2)
-rewardScalingArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2)
-actionScalingArg = ng.instrumentation.variables.Gaussian(mean=-1, std=1)
+rewardScalingArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
+actionScalingArg = ng.instrumentation.variables.Gaussian(mean=0.5, std=1)
 weightRegularizationConstantArg = ng.instrumentation.variables.Gaussian(mean=-2, std=1)
 
 instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, actionScalingArg, weightRegularizationConstantArg)
@@ -53,7 +53,7 @@ try:
         gamma=0.99,
         maxMemoryLength=int(1e6),
         priorityExponent=0,
-        batchSize=256,
+        batchSize=64,
         maxGradientNorm=5,
         maxEpisodes=1024,
         trainSteps=1024,
@@ -64,7 +64,8 @@ try:
         stepsPerUpdate=1,
         render=False,
         showGraphs=False,
-        weightRegularizationConstant=weightRegularizationConstant,
+        meanRegularizationConstant=weightRegularizationConstant,
+        varianceRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
         maxMinutes=15
     )

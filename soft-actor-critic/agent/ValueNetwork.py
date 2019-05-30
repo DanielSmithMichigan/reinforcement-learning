@@ -2,6 +2,10 @@ import tensorflow as tf
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.colorbar import colorbar
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+import math
+from collections import deque
 
 from . import util
 from . import constants
@@ -28,10 +32,11 @@ class ValueNetwork:
         self.maxGradientNorm = maxGradientNorm
         self.batchSize = batchSize
         self.numActions = numActions
-        self.lossOverTime = []
-        self.targetValueOverTime = []
-        self.predictedValueOverTime = []
-        self.entropyValueOverTime = []
+        self.entireAssessment = None
+        self.lossOverTime = deque([], 400)
+        self.targetValueOverTime = deque([], 400)
+        self.predictedValueOverTime = deque([], 400)
+        self.entropyValueOverTime = deque([], 400)
         self.buildNetwork()
         if showGraphs:
             self.buildGraphs()
@@ -52,6 +57,15 @@ class ValueNetwork:
         self.overview.suptitle(self.name)
         self.lossGraph = self.overview.add_subplot(2, 1, 1)
         self.predictedVsActualGraph = self.overview.add_subplot(2, 1, 2)
+        # self.fullAssessmentColorBar = self.overview.add_subplot(3, 1, 3)
+
+        self.fullAssessmentFigure = plt.figure()
+        self.fullAssessmentFigure.suptitle(self.name)
+        self.fullAssessmentFigureXRange = np.linspace(0,2 * math.pi,200)
+        self.fullAssessmentFigureYRange = np.linspace(-8, 8, 200)
+        self.entireAssessmentGraph = self.fullAssessmentFigure.add_subplot(1, 1, 1)
+        divider = make_axes_locatable(self.entireAssessmentGraph)
+        self.entireAssessmentColorBar = divider.append_axes("right", size="7%", pad="2%")
     def updateGraphs(self):
         self.lossGraph.cla()
         self.lossGraph.plot(self.lossOverTime)
@@ -64,13 +78,31 @@ class ValueNetwork:
         self.predictedVsActualGraph.plot(self.entropyValueOverTime, label="Entropy")
         self.predictedVsActualGraph.legend(loc=2)
 
+        self.assessEntireSpace()
+        self.entireAssessmentGraph.cla()
+        self.entireAssessmentColorBar.cla()
+        ax=self.entireAssessmentGraph.imshow(self.entireAssessment)
+        colorbar(ax, cax=self.entireAssessmentColorBar)
+        # self.entireAssessmentGraph.set_xticks(self.fullAssessmentFigureXRange)
+        # self.entireAssessmentGraph.set_yticks(self.fullAssessmentFigureYRange)
+
         self.overview.canvas.draw()
+        self.fullAssessmentFigure.canvas.draw()
     def buildSoftCopyOperation(self, networkParams, tau):
         return [tf.assign(t, (1 - tau) * t + tau * e) for t, e in zip(self.networkParams, networkParams)]
     def setNetworks(self, policyNetwork, qNetwork1, qNetwork2):
         self.policyNetwork = policyNetwork
         self.qNetwork1 = qNetwork1
         self.qNetwork2 = qNetwork2
+    def assessEntireSpace(self):
+        states = []
+        for y in self.fullAssessmentFigureYRange:
+            for x in self.fullAssessmentFigureXRange:
+                states.append([math.cos(x), math.sin(x), y])
+        self.entireAssessment = self.sess.run(self.value, feed_dict={
+            self.statePh: states
+        })
+        self.entireAssessment = np.reshape(self.entireAssessment, [200, 200])
     def buildTrainingOperation(self):
         self.minQValue = tf.minimum(self.qNetwork1.qValue, self.qNetwork2.qValue)
         util.assertShape(self.minQValue, [None, 1])

@@ -41,7 +41,8 @@ class Agent:
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
-            weightRegularizationConstant,
+            meanRegularizationConstant,
+            varianceRegularizationConstant,
             testSteps,
             maxMinutes
         ):
@@ -111,7 +112,8 @@ class Agent:
             learningRate=policyNetworkLearningRate,
             maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
-            weightRegularizationConstant=weightRegularizationConstant,
+            meanRegularizationConstant=meanRegularizationConstant,
+            varianceRegularizationConstant=varianceRegularizationConstant,
             showGraphs=showGraphs
         )
 
@@ -179,6 +181,7 @@ class Agent:
         self.qNetwork1.storeAssessment(self.state, actionsChosen)
         self.qNetwork2.storeAssessment(self.state, actionsChosen)
         nextState, reward, done, info = self.env.step((actionsChosen + self.actionShift) * self.actionScaling)
+        done = False
         if (self.render):
             self.env.render()
         memoryEntry = np.array(np.zeros(constants.NUM_MEMORY_ENTRIES), dtype=object)
@@ -240,6 +243,7 @@ class Agent:
         self.rewardsPlot.cla()
         self.rewardsPlot.set_title("Rewards")
         self.rewardsPlot.plot(self.rewardsOverTime, label="Rewards")
+        plt.pause(0.00001)
     def execute(self):
         self.sess.run(tf.global_variables_initializer())
         self.sess.run(self.copyLearnedNetwork)

@@ -40,7 +40,8 @@ class PolicyNetwork:
             learningRate,
             maxGradientNorm,
             batchSize,
-            weightRegularizationConstant,
+            meanRegularizationConstant,
+            varianceRegularizationConstant,
             showGraphs
         ):
         self.sess = sess
@@ -62,7 +63,8 @@ class PolicyNetwork:
         self.qCostOverTime = deque([], 100)
         self.actionOutputOverTime = deque([], 100)
         self.regLossOverTime = deque([], 100)
-        self.weightRegularizationConstant = weightRegularizationConstant
+        self.meanRegularizationConstant = meanRegularizationConstant
+        self.varianceRegularizationConstant = varianceRegularizationConstant
         self.buildNetwork()
         if showGraphs:
             self.buildGraphs()
@@ -92,6 +94,10 @@ class PolicyNetwork:
         self.entropyGraph = self.overview.add_subplot(4, 1, 2)
         self.actionChoicesGraph = self.overview.add_subplot(4, 1, 3)
         self.costOverTimeGraph = self.overview.add_subplot(4, 1, 4)
+
+        self.meanChoicesFigure = plt.figure()
+        self.meanChoicesFigure.suptitle(self.name)
+        self.meanChoicesGraph = self.meanChoicesFigure.add_subplot(1, 1, 1)
     def updateGraphs(self):
         self.regTermGraph.cla()
         self.regTermGraph.set_title("Reg Term")
@@ -114,14 +120,29 @@ class PolicyNetwork:
         self.costOverTimeGraph.plot(self.regLossOverTime, label="Reg Loss")
         self.costOverTimeGraph.legend(loc=2)
 
+        self.meanChoicesGraph.cla()
+
         self.overview.canvas.draw()
     def setQNetwork(self, qNetwork):
         self.qNetwork = qNetwork
+    def assessEntireSpace(self):
+        xRange = np.linspace(0,2 * math.pi,800)
+        yRange = np.linspace(-8, 8, 800)
+        img = []
+        for y in yRange:
+            row = []
+            for x in xRange:
+                col = [math.cos(x), math.sin(x), y]
+                row.append(col)
+            img.append(row)
+        img = (img - np.min(img)) / (np.max(img) - np.min(img))
+        #Update ranges here. Better min/max
+        self.entireAssessment = img
     def buildTrainingOperation(self):
         self.entropyCoefficientPh = tf.placeholder(tf.float32, shape=1, name=self.name + "_entropyCoefficient")
         self.entropyLoss = self.entropyCoefficientPh * tf.reduce_mean(self.logProb)
-        regLoss = self.weightRegularizationConstant * 0.5 * tf.reduce_mean(self.uncleanedActionVariance ** 2)
-        regLoss += self.weightRegularizationConstant * 0.5 * tf.reduce_mean(self.actionMean ** 2)
+        regLoss = self.varianceRegularizationConstant * 0.5 * tf.reduce_mean(self.uncleanedActionVariance ** 2)
+        regLoss += self.meanRegularizationConstant * 0.5 * tf.reduce_mean(self.actionMean ** 2)
         self.regLoss = regLoss
         self.qCost = -tf.reduce_mean(self.qNetwork.qValue)
         self.totalLoss = self.entropyLoss + self.qCost + self.regLoss
