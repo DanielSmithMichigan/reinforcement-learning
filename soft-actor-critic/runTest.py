@@ -8,7 +8,7 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "soft-actor-critic-fixed-done"
+experimentName = "soft-actor-critic-long"
 
 entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
 learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2)
@@ -67,7 +67,7 @@ try:
         meanRegularizationConstant=weightRegularizationConstant,
         varianceRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
-        maxMinutes=15
+        maxMinutes=90
     )
 
     result = agent.execute()
