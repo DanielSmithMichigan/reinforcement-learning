@@ -8,18 +8,19 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "soft-actor-critic-long"
+experimentName = "soft-actor-critic-with-added-exploration"
 
-entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
-learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2)
-rewardScalingArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
-actionScalingArg = ng.instrumentation.variables.Gaussian(mean=0.5, std=1)
-weightRegularizationConstantArg = ng.instrumentation.variables.Gaussian(mean=-2, std=1)
+entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2.0)
+learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2.0)
+rewardScalingArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2.0)
+actionScalingArg = ng.instrumentation.variables.Gaussian(mean=0.5, std=1.0)
+weightRegularizationConstantArg = ng.instrumentation.variables.Gaussian(mean=-2, std=.25)
+epsilonDecayArg = ng.instrumentation.variables.Gaussian(mean=-5, std=1.0)
 
-instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, actionScalingArg, weightRegularizationConstantArg)
+instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, actionScalingArg, weightRegularizationConstantArg, epsilonDecayArg)
 optimizer = ng.optimizers.registry["TBPSA"](instrumentation=instrumentation, budget=os.environ['BUDGET'])
 
-cur.execute("select x1, x2, x3, x4, x5, y from experiments where label = '"+experimentName+"'")
+cur.execute("select x1, x2, x3, x4, x5, x6, y from experiments where label = '"+experimentName+"'")
 result = cur.fetchall()
 for row in result:
     candidate = optimizer.create_candidate.from_call(
@@ -27,9 +28,10 @@ for row in result:
         np.log10(float(row[1])),
         np.log10(float(row[2])),
         np.log10(float(row[3])),
-        np.log10(float(row[4]))
+        np.log10(float(row[4])),
+        np.log10(1.0 - float(row[5]))
     )
-    optimizer.tell(candidate, -float(row[5]))
+    optimizer.tell(candidate, -float(row[6]))
 
 nextTest = optimizer.ask()
 
@@ -38,7 +40,9 @@ learningRate = 10 ** nextTest.args[1]
 rewardScaling = 10 ** nextTest.args[2]
 actionScaling = 10 ** nextTest.args[3]
 weightRegularizationConstant = 10 ** nextTest.args[4]
+epsilonDecay = 1 - (10 ** nextTest.args[5])
 result = -20000
+
 try:
     agent = Agent(
         name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
@@ -67,7 +71,11 @@ try:
         meanRegularizationConstant=weightRegularizationConstant,
         varianceRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
-        maxMinutes=90
+        maxMinutes=15,
+        theta=0.15,
+        sigma=.2,
+        epsilonDecay=epsilonDecay,
+        epsilonInitial=1.0
     )
 
     result = agent.execute()
@@ -81,7 +89,7 @@ cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9,
         rewardScaling,
         actionScaling,
         weightRegularizationConstant,
-        0,
+        epsilonDecay,
         0,
         0,
         0,

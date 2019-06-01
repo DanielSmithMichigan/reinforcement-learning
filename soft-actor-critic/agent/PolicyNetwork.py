@@ -3,6 +3,8 @@ import math
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.colorbar import colorbar
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 import time
 
 from . import constants
@@ -42,7 +44,11 @@ class PolicyNetwork:
             batchSize,
             meanRegularizationConstant,
             varianceRegularizationConstant,
-            showGraphs
+            showGraphs,
+            theta,
+            sigma,
+            epsilonInitial,
+            epsilonDecay
         ):
         self.sess = sess
         self.name = name
@@ -63,8 +69,13 @@ class PolicyNetwork:
         self.qCostOverTime = deque([], 100)
         self.actionOutputOverTime = deque([], 100)
         self.regLossOverTime = deque([], 100)
+        self.epsilonOverTime = deque([], 100)
+        self.entireAssessment = None
         self.meanRegularizationConstant = meanRegularizationConstant
         self.varianceRegularizationConstant = varianceRegularizationConstant
+        self.actionNoise = util.OrnsteinUhlenbeckActionNoise(mu=np.zeros(numActions), theta=theta, sigma=sigma)
+        self.epsilon = epsilonInitial
+        self.epsilonDecay = epsilonDecay
         self.buildNetwork()
         if showGraphs:
             self.buildGraphs()
@@ -90,14 +101,19 @@ class PolicyNetwork:
         plt.ion()
         self.overview = plt.figure()
         self.overview.suptitle(self.name)
-        self.regTermGraph = self.overview.add_subplot(4, 1, 1)
-        self.entropyGraph = self.overview.add_subplot(4, 1, 2)
-        self.actionChoicesGraph = self.overview.add_subplot(4, 1, 3)
-        self.costOverTimeGraph = self.overview.add_subplot(4, 1, 4)
+        self.regTermGraph = self.overview.add_subplot(5, 1, 1)
+        self.entropyGraph = self.overview.add_subplot(5, 1, 2)
+        self.actionChoicesGraph = self.overview.add_subplot(5, 1, 3)
+        self.costOverTimeGraph = self.overview.add_subplot(5, 1, 4)
+        self.epsilonOverTimeGraph = self.overview.add_subplot(5, 1, 5)
 
-        self.meanChoicesFigure = plt.figure()
-        self.meanChoicesFigure.suptitle(self.name)
-        self.meanChoicesGraph = self.meanChoicesFigure.add_subplot(1, 1, 1)
+        self.fullAssessmentFigure = plt.figure()
+        self.fullAssessmentFigure.suptitle(self.name)
+        self.fullAssessmentFigureXRange = np.linspace(0,2 * math.pi,200)
+        self.fullAssessmentFigureYRange = np.linspace(-8, 8, 200)
+        self.entireAssessmentGraph = self.fullAssessmentFigure.add_subplot(1, 1, 1)
+        divider = make_axes_locatable(self.entireAssessmentGraph)
+        self.entireAssessmentColorBar = divider.append_axes("right", size="7%", pad="2%")
     def updateGraphs(self):
         self.regTermGraph.cla()
         self.regTermGraph.set_title("Reg Term")
@@ -120,24 +136,29 @@ class PolicyNetwork:
         self.costOverTimeGraph.plot(self.regLossOverTime, label="Reg Loss")
         self.costOverTimeGraph.legend(loc=2)
 
-        self.meanChoicesGraph.cla()
+        self.epsilonOverTimeGraph.cla()
+        self.epsilonOverTimeGraph.set_title("Epsilon")
+        self.epsilonOverTimeGraph.plot(self.epsilonOverTime, label="Epsilon")
+
+        self.assessEntireSpace()
+        self.entireAssessmentGraph.cla()
+        self.entireAssessmentColorBar.cla()
+        ax=self.entireAssessmentGraph.imshow(self.entireAssessment, vmax=0.3, vmin=-0.3)
+        colorbar(ax, cax=self.entireAssessmentColorBar)
 
         self.overview.canvas.draw()
+        self.fullAssessmentFigure.canvas.draw()
     def setQNetwork(self, qNetwork):
         self.qNetwork = qNetwork
     def assessEntireSpace(self):
-        xRange = np.linspace(0,2 * math.pi,800)
-        yRange = np.linspace(-8, 8, 800)
-        img = []
-        for y in yRange:
-            row = []
-            for x in xRange:
-                col = [math.cos(x), math.sin(x), y]
-                row.append(col)
-            img.append(row)
-        img = (img - np.min(img)) / (np.max(img) - np.min(img))
-        #Update ranges here. Better min/max
-        self.entireAssessment = img
+        states = []
+        for y in self.fullAssessmentFigureYRange:
+            for x in self.fullAssessmentFigureXRange:
+                states.append([math.cos(x), math.sin(x), y])
+        self.entireAssessment = self.sess.run(self.actionMean, feed_dict={
+            self.statePh: states
+        })
+        self.entireAssessment = np.reshape(self.entireAssessment, [200, 200])
     def buildTrainingOperation(self):
         self.entropyCoefficientPh = tf.placeholder(tf.float32, shape=1, name=self.name + "_entropyCoefficient")
         self.entropyLoss = self.entropyCoefficientPh * tf.reduce_mean(self.logProb)
@@ -226,5 +247,9 @@ class PolicyNetwork:
         self.meanOverTime.append(actionMean[0])
         self.varianceOverTime.append(np.exp(logScaleActionVariance[0]))
         self.actionOutputOverTime.append(output[0])
-        return output[0], logScaleActionVariance[0], logProb[0], entropy
+        actionNoise = self.actionNoise()
+        actionOut = output[0] + (actionNoise * self.epsilon)
+        self.epsilonOverTime.append(self.epsilon)
+        self.epsilon = self.epsilon * self.epsilonDecay
+        return actionOut, logScaleActionVariance[0], logProb[0], entropy
 

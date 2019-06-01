@@ -44,7 +44,11 @@ class Agent:
             meanRegularizationConstant,
             varianceRegularizationConstant,
             testSteps,
-            maxMinutes
+            maxMinutes,
+            theta,
+            sigma,
+            epsilonDecay,
+            epsilonInitial
         ):
         self.numStateVariables = 3
         self.numActions = 1
@@ -114,7 +118,11 @@ class Agent:
             batchSize=batchSize,
             meanRegularizationConstant=meanRegularizationConstant,
             varianceRegularizationConstant=varianceRegularizationConstant,
-            showGraphs=showGraphs
+            showGraphs=showGraphs,
+            theta=theta,
+            sigma=sigma,
+            epsilonInitial=epsilonInitial,
+            epsilonDecay=epsilonDecay
         )
 
         self.qNetwork1.setValueNetwork(self.targetValueNetwork)
