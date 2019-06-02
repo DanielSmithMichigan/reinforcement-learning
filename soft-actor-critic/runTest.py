@@ -65,7 +65,7 @@ try:
         meanRegularizationConstant=weightRegularizationConstant,
         varianceRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
-        maxMinutes=5,
+        maxMinutes=10,
         theta=0.15,
         sigma=.2,
         epsilonDecay=.99999,
