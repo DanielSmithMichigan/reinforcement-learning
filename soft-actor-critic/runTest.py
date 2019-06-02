@@ -31,7 +31,7 @@ for row in result:
 
 nextTest = optimizer.ask()
 
-entropyCoefficient = min(10 ** nextTest.args[0], 0.1)
+entropyCoefficient = min(10 ** nextTest.args[0], 0.05)
 learningRate = 10 ** nextTest.args[1]
 rewardScaling = 10 ** nextTest.args[2]
 weightRegularizationConstant = 10 ** nextTest.args[3]
