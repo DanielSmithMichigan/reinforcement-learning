@@ -34,6 +34,7 @@ def clip_but_pass_gradient(input_, lower=-1., upper=1.):
 class PolicyNetwork:
     def __init__(self,
             sess,
+            graph,
             name,
             numStateVariables,
             numActions,
@@ -45,12 +46,10 @@ class PolicyNetwork:
             meanRegularizationConstant,
             varianceRegularizationConstant,
             showGraphs,
-            theta,
-            sigma,
-            epsilonInitial,
-            epsilonDecay
+            statePh
         ):
         self.sess = sess
+        self.graph = graph
         self.name = name
         self.numStateVariables = numStateVariables
         self.numActions = numActions
@@ -59,197 +58,101 @@ class PolicyNetwork:
         self.learningRate = learningRate
         self.maxGradientNorm = maxGradientNorm
         self.batchSize = batchSize
-        self.regTermOverTime = deque([], 100)
-        self.entropyOverTime = deque([], 100)
-        self.actionsChosenOverTime = []
-        self.meanOverTime = deque([], 100)
-        self.varianceOverTime = deque([], 100)
-        self.entropyCostOverTime = deque([], 100)
-        self.recentEntropy = deque([], 100)
-        self.qCostOverTime = deque([], 100)
-        self.actionOutputOverTime = deque([], 100)
-        self.regLossOverTime = deque([], 100)
-        self.epsilonOverTime = deque([], 100)
-        self.entireAssessment = None
+        self.statePh = statePh
         self.meanRegularizationConstant = meanRegularizationConstant
         self.varianceRegularizationConstant = varianceRegularizationConstant
-        self.actionNoise = util.OrnsteinUhlenbeckActionNoise(mu=np.zeros(numActions), theta=theta, sigma=sigma)
-        self.epsilon = epsilonInitial
-        self.epsilonDecay = epsilonDecay
-        self.buildNetwork()
-        if showGraphs:
-            self.buildGraphs()
-    def buildNetwork(self):
-        with tf.variable_scope(self.name):
-            self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name=self.name + "_state")
-            prevLayer = self.statePh
-            layerNum = 0
-            for i in self.networkSize:
-                prevLayer = tf.layers.dense(inputs=prevLayer, units=i, activation=tf.nn.leaky_relu, name=self.name + "_dense_" + str(layerNum))
-                layerNum = layerNum + 1
-            self.actionMean = tf.layers.dense(inputs=prevLayer, units=self.numActions, name=self.name+"_actionMean")
-            self.uncleanedActionVariance = tf.layers.dense(inputs=prevLayer, units=self.numActions, name=self.name+"_logScaleActionVariance", activation=tf.nn.tanh)
-            self.logScaleActionVariance = -20 + 0.5 * (2 - -20) * (self.uncleanedActionVariance + 1)
-            self.actionVariance = tf.exp(self.logScaleActionVariance)
-            self.randoms = tf.random.normal(shape=tf.shape(self.actionMean), dtype=tf.float32)
-            self.rawAction = self.actionMean + (self.randoms * self.actionVariance)
-            self.actionsChosen = tf.tanh(self.rawAction)
-            self.entropy = tf.reduce_sum(self.logScaleActionVariance + 0.5 * np.log(2.0 * np.pi * np.e), axis=-1)
-            self.logProb = gaussian_likelihood(self.rawAction, self.actionMean, self.logScaleActionVariance) - tf.reduce_sum(tf.log(clip_but_pass_gradient(1 - self.actionsChosen ** 2, lower=0, upper=1) + EPS), axis=1)
-        self.networkParams = tf.trainable_variables(scope=self.name)
-    def buildGraphs(self):
-        plt.ion()
-        self.overview = plt.figure()
-        self.overview.suptitle(self.name)
-        self.regTermGraph = self.overview.add_subplot(5, 1, 1)
-        self.entropyGraph = self.overview.add_subplot(5, 1, 2)
-        self.actionChoicesGraph = self.overview.add_subplot(5, 1, 3)
-        self.costOverTimeGraph = self.overview.add_subplot(5, 1, 4)
-        self.epsilonOverTimeGraph = self.overview.add_subplot(5, 1, 5)
-
-        self.fullAssessmentFigure = plt.figure()
-        self.fullAssessmentFigure.suptitle(self.name)
-        self.fullAssessmentFigureXRange = np.linspace(0,2 * math.pi,200)
-        self.fullAssessmentFigureYRange = np.linspace(-8, 8, 200)
-        self.entireAssessmentGraph = self.fullAssessmentFigure.add_subplot(1, 1, 1)
-        divider = make_axes_locatable(self.entireAssessmentGraph)
-        self.entireAssessmentColorBar = divider.append_axes("right", size="7%", pad="2%")
-    def updateGraphs(self):
-        self.regTermGraph.cla()
-        self.regTermGraph.set_title("Reg Term")
-        self.regTermGraph.plot(self.regTermOverTime)
-
-        self.entropyGraph.cla()
-        self.entropyGraph.set_title("Entropy")
-        self.entropyGraph.plot(self.entropyOverTime)
-
-        self.actionChoicesGraph.cla()
-        self.actionChoicesGraph.set_title("Action Choices")
-        self.actionChoicesGraph.plot(util.getColumn(self.meanOverTime, 0), label="mean")
-        self.actionChoicesGraph.plot(util.getColumn(self.varianceOverTime, 0), label="variance")
-        self.actionChoicesGraph.legend(loc=2)
-
-        self.costOverTimeGraph.cla()
-        self.costOverTimeGraph.set_title("Cost")
-        self.costOverTimeGraph.plot(self.entropyCostOverTime, label="Entropy")
-        self.costOverTimeGraph.plot(self.qCostOverTime, label="Q Value")
-        self.costOverTimeGraph.plot(self.regLossOverTime, label="Reg Loss")
-        self.costOverTimeGraph.legend(loc=2)
-
-        self.epsilonOverTimeGraph.cla()
-        self.epsilonOverTimeGraph.set_title("Epsilon")
-        self.epsilonOverTimeGraph.plot(self.epsilonOverTime, label="Epsilon")
-
-        self.assessEntireSpace()
-        self.entireAssessmentGraph.cla()
-        self.entireAssessmentColorBar.cla()
-        ax=self.entireAssessmentGraph.imshow(self.entireAssessment, vmax=0.3, vmin=-0.3)
-        colorbar(ax, cax=self.entireAssessmentColorBar)
-
-        self.overview.canvas.draw()
-        self.fullAssessmentFigure.canvas.draw()
-    def setQNetwork(self, qNetwork):
-        self.qNetwork = qNetwork
-    def assessEntireSpace(self):
-        states = []
-        for y in self.fullAssessmentFigureYRange:
-            for x in self.fullAssessmentFigureXRange:
-                states.append([math.cos(x), math.sin(x), y])
-        self.entireAssessment = self.sess.run(self.actionMean, feed_dict={
-            self.statePh: states
-        })
-        self.entireAssessment = np.reshape(self.entireAssessment, [200, 200])
-    def buildTrainingOperation(self):
-        self.entropyCoefficientPh = tf.placeholder(tf.float32, shape=1, name=self.name + "_entropyCoefficient")
-        self.entropyLoss = self.entropyCoefficientPh * tf.reduce_mean(self.logProb)
-        regLoss = self.varianceRegularizationConstant * 0.5 * tf.reduce_mean(self.uncleanedActionVariance ** 2)
-        regLoss += self.meanRegularizationConstant * 0.5 * tf.reduce_mean(self.actionMean ** 2)
-        self.regLoss = regLoss
-        self.qCost = -tf.reduce_mean(self.qNetwork.qValue)
-        self.totalLoss = self.entropyLoss + self.qCost + self.regLoss
-        self.loss = tf.reduce_mean(self.totalLoss)
-        self.optimizer = tf.train.AdamOptimizer(self.learningRate)
-        self.uncappedGradients, variables = zip(*self.optimizer.compute_gradients(self.loss,var_list=self.networkParams))
-        (
-            self.cappedGradients,
-            self.gradientNorm
-        ) = tf.clip_by_global_norm(self.uncappedGradients, self.maxGradientNorm)
-        self.trainingOperation = self.optimizer.apply_gradients(zip(self.cappedGradients, variables))
-    def trainAgainst(self, memories):
-        (
-            _,
-            qCost,
-            qValue,
+        with self.graph.as_default():
+            self.entropyCoefficientPh = tf.placeholder(
+                tf.float32,
+                shape=[],
+                name=self.name + "_entropyCoefficient"
+            )
+    def buildNetwork(self, state):
+        actionsChosen = None
+        rawAction = None
+        actionMean = None
+        uncleanedActionVariance = None
+        logScaleActionVariance = None
+        actionVariance = None
+        entropy = None
+        logProb = None
+        with self.graph.as_default():
+            with tf.variable_scope(self.name):
+                prevLayer = state
+                for i in range(len(self.networkSize)):
+                    prevLayer = tf.layers.dense(
+                        inputs=prevLayer,
+                        units=self.networkSize[i],
+                        activation=tf.nn.relu,
+                        name="dense_" + str(i),
+                        reuse=tf.AUTO_REUSE
+                    )
+                actionMean = tf.layers.dense(
+                    inputs=prevLayer,
+                    units=self.numActions,
+                    name="actionMean",
+                    reuse=tf.AUTO_REUSE
+                )
+                uncleanedActionVariance = tf.layers.dense(
+                    inputs=prevLayer,
+                    units=self.numActions,
+                    name="logScaleActionVariance",
+                    reuse=tf.AUTO_REUSE,
+                    activation=tf.nn.tanh
+                )
+                logScaleActionVariance = -20 + 0.5 * (2 - -20) * (uncleanedActionVariance + 1)
+                actionVariance = tf.exp(logScaleActionVariance)
+                randoms = tf.random.normal(shape=tf.shape(actionMean), dtype=tf.float32)
+                rawAction = actionMean + (randoms * actionVariance)
+                actionsChosen = tf.tanh(rawAction)
+                entropy = tf.reduce_sum(logScaleActionVariance + 0.5 * np.log(2.0 * np.pi * np.e), axis=1)
+                logProb = gaussian_likelihood(rawAction, actionMean, logScaleActionVariance) - tf.reduce_sum(tf.log(clip_but_pass_gradient(1 - actionsChosen ** 2, lower=0, upper=1) + EPS), axis=1)
+        return (
             actionsChosen,
             rawAction,
-            logProb,
-            mean,
-            variance,
-            totalLoss,
-            entropyLoss,
-            loss,
-            gradients,
-            gradientNorm,
-            regLoss
-        ) = self.sess.run([
-            self.trainingOperation,
-            self.qCost,
-            self.qNetwork.qValue,
-            self.actionsChosen,
-            self.rawAction,
-            self.logProb,
-            self.actionMean,
-            self.logScaleActionVariance,
-            self.totalLoss,
-            self.entropyLoss,
-            self.loss,
-            self.cappedGradients,
-            self.gradientNorm,
-            self.regLoss
-        ], feed_dict={
-            self.statePh: util.getColumn(memories, constants.STATE),
-            self.qNetwork.statePh: util.getColumn(memories, constants.STATE),
-            self.entropyCoefficientPh: [self.entropyCoefficient]
-        })
-
-        # print("Gradients")
-        # print(gradients)actionsPh
-        # print("Gradient Norm")
-        # print(gradientNorm)
-        # print("ENTROPY LOSS: "+str(entropyLoss))
-        # print("Q LOSS: "+str(qCost))
-        self.qCostOverTime.append(np.mean(qCost))
-        self.entropyCostOverTime.append(np.mean(entropyLoss))
-        self.recentEntropy.append(np.mean(logProb))
-        self.regTermOverTime.append(gradientNorm)
-        self.regLossOverTime.append(regLoss)
-        self.entropyOverTime.append(np.mean(logProb))
-    def getAction(self, state):
-        (
-            rawAction,
-            output,
-            logProb,
             actionMean,
+            uncleanedActionVariance,
             logScaleActionVariance,
-            entropy
-        ) = self.sess.run([
-            self.rawAction,
-            self.actionsChosen,
-            self.logProb,
-            self.actionMean,
-            self.logScaleActionVariance,
-            self.entropy
-        ], feed_dict={
-            self.statePh: [state]
-        })
-        # print("MEAN: ",actionMean[0][0]," VARIANCE: ",logScaleActionVariance[0][0]," RAW: ",rawAction[0][0]," ENTROPY: ",entropy)
-        self.actionsChosenOverTime.append(rawAction[0])
-        self.meanOverTime.append(actionMean[0])
-        self.varianceOverTime.append(np.exp(logScaleActionVariance[0]))
-        self.actionOutputOverTime.append(output[0])
-        actionNoise = self.actionNoise()
-        actionOut = output[0] + (actionNoise * self.epsilon)
-        self.epsilonOverTime.append(self.epsilon)
-        self.epsilon = self.epsilon * self.epsilonDecay
-        return actionOut, logScaleActionVariance[0], logProb[0], entropy
+            actionVariance,
+            entropy,
+            logProb
+        )
+    def setQNetwork(self, qNetwork):
+        self.qNetwork = qNetwork
+    def buildTrainingOperation(self):
+        with self.graph.as_default():
+            (
+                actionsChosen,
+                _,
+                actionMean,
+                uncleanedActionVariance,
+                _,
+                _,
+                _,
+                logProb
+            ) = self.buildNetwork(self.statePh)
+            entropyLoss = self.entropyCoefficientPh * tf.reduce_mean(logProb)
+            regLoss = 0 \
+                + self.varianceRegularizationConstant * 0.5 * tf.reduce_mean(uncleanedActionVariance ** 2) \
+                + self.meanRegularizationConstant * 0.5 * tf.reduce_mean(actionMean ** 2)
+            qCost = -tf.reduce_mean(
+                self.qNetwork.buildNetwork(
+                    self.statePh,
+                    actionsChosen
+                )
+            )
+            totalLoss = entropyLoss + qCost + regLoss
+            loss = tf.reduce_mean(totalLoss)
+            optimizer = tf.train.AdamOptimizer(self.learningRate)
+            uncappedGradients, variables = zip(
+                *optimizer.compute_gradients(
+                    loss,
+                    var_list=tf.trainable_variables(scope=self.name)
+                )
+            )
+            (
+                cappedGradients,
+                self.gradientNorm
+            ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
+            return optimizer.apply_gradients(zip(cappedGradients, variables))
 

@@ -2,18 +2,25 @@ import tensorflow as tf
 import numpy as np
 import gym
 import time
+import math
 from collections import deque
+import multiprocessing
+import sys
 
 import matplotlib
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.colorbar import colorbar
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 import time
 
 from .PolicyNetwork import PolicyNetwork
 from .QNetwork import QNetwork
 from .ValueNetwork import ValueNetwork
 from . import constants
+from . import util
 
 from .prioritized_experience_replay import PrioritizedExperienceReplay
+from .simple_experience_replay import SimpleExperienceReplay
 
 
 class Agent:
@@ -50,14 +57,26 @@ class Agent:
             epsilonDecay,
             epsilonInitial
         ):
+        self.graph = tf.Graph()
         self.numStateVariables = 3
         self.numActions = 1
+        self.entropyCoefficient = entropyCoefficient
+        self.batchSize = batchSize
+        self.tau = tau
+        with self.graph.as_default():
+            self.sess = tf.Session()
+            self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name="State_Placeholder")
+            self.nextStatePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name="Next_State_Placeholder")
+            self.actionsPh = tf.placeholder(tf.float32, [None, self.numActions], name="Actions_Placeholder")
+            self.rewardsPh = tf.placeholder(tf.float32, [None, ], name="Rewards_Placeholder")
+            self.terminalsPh = tf.placeholder(tf.float32, [None, ], name="Terminals_Placeholder")
+        self.trainingOperations = []
         self.env = gym.make('Pendulum-v0')
-        self.sess = tf.Session()
         self.startTime = time.time()
 
         self.learnedValueNetwork = ValueNetwork(
             sess=self.sess,
+            graph=self.graph,
             name="LearnedValueNetwork_"+name,
             numStateVariables=self.numStateVariables,
             networkSize=valueNetworkSize,
@@ -66,11 +85,13 @@ class Agent:
             maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
             numActions=self.numActions,
-            showGraphs=showGraphs
+            showGraphs=showGraphs,
+            statePh=self.statePh
         )
         self.targetValueNetwork = ValueNetwork(
             name="TargetValueNetwork_"+name,
             sess=self.sess,
+            graph=self.graph,
             numStateVariables=self.numStateVariables,
             networkSize=valueNetworkSize,
             entropyCoefficient=entropyCoefficient,
@@ -78,13 +99,13 @@ class Agent:
             maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
             numActions=self.numActions,
-            showGraphs=showGraphs
+            showGraphs=showGraphs,
+            statePh=self.statePh
         )
-        self.copyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork.networkParams, 1)
-        self.softCopyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork.networkParams, tau)
 
         self.qNetwork1 = QNetwork(
             sess=self.sess,
+            graph=self.graph,
             name="QNetwork_1_"+name,
             numStateVariables=self.numStateVariables,
             numActions=self.numActions,
@@ -92,10 +113,16 @@ class Agent:
             gamma=gamma,
             learningRate=qNetworkLearningRate,
             maxGradientNorm=maxGradientNorm,
-            showGraphs=showGraphs
+            showGraphs=showGraphs,
+            statePh=self.statePh,
+            nextStatePh=self.nextStatePh,
+            actionsPh=self.actionsPh,
+            rewardsPh=self.rewardsPh,
+            terminalsPh=self.terminalsPh
         )
         self.qNetwork2 = QNetwork(
             sess=self.sess,
+            graph=self.graph,
             name="QNetwork_2_"+name,
             numStateVariables=self.numStateVariables,
             numActions=self.numActions,
@@ -103,11 +130,17 @@ class Agent:
             gamma=gamma,
             learningRate=qNetworkLearningRate,
             maxGradientNorm=maxGradientNorm,
-            showGraphs=showGraphs
+            showGraphs=showGraphs,
+            statePh=self.statePh,
+            nextStatePh=self.nextStatePh,
+            actionsPh=self.actionsPh,
+            rewardsPh=self.rewardsPh,
+            terminalsPh=self.terminalsPh
         )
 
         self.policyNetwork = PolicyNetwork(
             sess=self.sess,
+            graph=self.graph,
             name="PolicyNetwork_"+name,
             numStateVariables=self.numStateVariables,
             numActions=self.numActions,
@@ -119,36 +152,24 @@ class Agent:
             meanRegularizationConstant=meanRegularizationConstant,
             varianceRegularizationConstant=varianceRegularizationConstant,
             showGraphs=showGraphs,
-            theta=theta,
-            sigma=sigma,
-            epsilonInitial=epsilonInitial,
-            epsilonDecay=epsilonDecay
+            statePh=self.statePh
         )
 
-        self.qNetwork1.setValueNetwork(self.targetValueNetwork)
-        self.qNetwork1.setPolicyNetwork(self.policyNetwork)
-        self.qNetwork1.buildNetwork()
-        self.qNetwork1.buildTrainingOperation()
+        self.buildTrainingOperation()
+        self.buildActionOperation()
+        self.buildGraphingOperation()
 
-        self.qNetwork2.setValueNetwork(self.targetValueNetwork)
-        self.qNetwork2.setPolicyNetwork(self.policyNetwork)
-        self.qNetwork2.buildNetwork()
-        self.qNetwork2.buildTrainingOperation()
-
-        self.learnedValueNetwork.setNetworks(self.policyNetwork, self.qNetwork1, self.qNetwork2)
-        self.learnedValueNetwork.buildTrainingOperation()
-
-        self.targetValueNetwork.setNetworks(self.policyNetwork, self.qNetwork1, self.qNetwork2)
-        self.targetValueNetwork.buildTrainingOperation()
-
-        self.policyNetwork.setQNetwork(self.qNetwork1)
-        self.policyNetwork.buildTrainingOperation()
-
-        self.memoryBuffer = PrioritizedExperienceReplay(
-            numMemories=maxMemoryLength,
-            priorityExponent=priorityExponent,
-            batchSize=batchSize
-        )
+        if float(priorityExponent) != 0.0:
+            self.memoryBuffer = PrioritizedExperienceReplay(
+                numMemories=maxMemoryLength,
+                priorityExponent=priorityExponent,
+                batchSize=batchSize
+            )
+        else:
+            self.memoryBuffer = SimpleExperienceReplay(
+                numMemories=maxMemoryLength,
+                batchSize=batchSize
+            )
 
         self.name = name
         self.maxEpisodes = maxEpisodes
@@ -163,32 +184,133 @@ class Agent:
         self.actionShift = actionShift
         self.testSteps = testSteps
         self.maxMinutes = maxMinutes
+        self.fpsOverTime = deque([], 400)
+        self.lastGlobalStep = 0
+        self.lastTime = time.time()
         if showGraphs:
             self.buildGraphs()
-        self.getQTargetsOverTime = deque([], 400)
-        self.getValueTargetsOverTime = deque([], 400)
-        self.trainQOverTime = deque([], 400)
-        self.trainValueOverTime = deque([], 400)
-        self.trainPolicyOverTime = deque([], 400)
-        self.rewardsOverTime = deque([], 400)
     def buildGraphs(self):
         plt.ion()
-        self.overview = plt.figure()
-        self.overview.suptitle(self.name)
-        self.timersPlot = self.overview.add_subplot(2, 1, 1)
-        self.rewardsPlot = self.overview.add_subplot(2, 1, 2)
+        self.qAssessmentFigure = plt.figure()
+        self.qAssessmentFigure.suptitle("Q Assessments")
+        self.qAssessmentGraph = self.qAssessmentFigure.add_subplot(1, 1, 1)
+        divider = make_axes_locatable(self.qAssessmentGraph)
+        self.qAssessmentColorBar = divider.append_axes("right", size="7%", pad="2%")
+
+        self.valueAssessmentFigure = plt.figure()
+        self.valueAssessmentFigure.suptitle("Value Assessments")
+        self.valueAssessmentGraph = self.valueAssessmentFigure.add_subplot(1, 1, 1)
+        divider = make_axes_locatable(self.valueAssessmentGraph)
+        self.valueAssessmentColorBar = divider.append_axes("right", size="7%", pad="2%")
+
+        self.policyFigure = plt.figure()
+        self.policyFigure.suptitle("Policy")
+        self.policyGraph = self.policyFigure.add_subplot(1, 1, 1)
+        divider = make_axes_locatable(self.policyGraph)
+        self.policyColorBar = divider.append_axes("right", size="7%", pad="2%")
+    def updateGraphs(self):
+        self.updateEvalGraphs()
+
+        plt.pause(0.0001)
+    def updateEvalGraphs(self):
+        states = []
+        imageRadius = constants.IMAGE_SIZE / 2
+        for xImg in range(constants.IMAGE_SIZE):
+            for yImg in range(constants.IMAGE_SIZE):
+                x = xImg - imageRadius
+                y = yImg - imageRadius
+                v = np.clip(math.sqrt(x * x + y * y) * 16 / imageRadius, 0, 16)
+                v = v - 8
+                theta = math.atan(y / x) if x != 0 else math.pi / 2
+                if x < 0 and y > 0:
+                    theta = theta + math.pi
+                elif x < 0 and y < 0:
+                    theta = theta + math.pi
+                elif x > 0 and y < 0:
+                    theta = theta + math.pi + math.pi
+                states.append([math.cos(theta), math.sin(theta), v])
+        (
+            actionsChosen,
+            qAssessments,
+            valueAssessments
+        ) = self.sess.run(
+            self.graphingOperations,
+            feed_dict={
+                self.statePh: states
+            }
+        )
+        actionsChosenImg = np.reshape(actionsChosen, [constants.IMAGE_SIZE, constants.IMAGE_SIZE])
+        qAssessmentsImg = np.reshape(qAssessments, [constants.IMAGE_SIZE, constants.IMAGE_SIZE])
+        valueAssessmentsImg = np.reshape(valueAssessments, [constants.IMAGE_SIZE, constants.IMAGE_SIZE])
+
+        self.qAssessmentGraph.cla()
+        self.qAssessmentColorBar.cla()
+        ax=self.qAssessmentGraph.imshow(qAssessmentsImg)
+        colorbar(ax, cax=self.qAssessmentColorBar)
+        self.qAssessmentFigure.canvas.draw()
+
+        self.valueAssessmentGraph.cla()
+        self.valueAssessmentColorBar.cla()
+        ax=self.valueAssessmentGraph.imshow(valueAssessmentsImg)
+        colorbar(ax, cax=self.valueAssessmentColorBar)
+        self.valueAssessmentFigure.canvas.draw()
+
+        self.policyGraph.cla()
+        self.policyColorBar.cla()
+        ax=self.policyGraph.imshow(actionsChosenImg)
+        colorbar(ax, cax=self.policyColorBar)
+        self.policyFigure.canvas.draw()
     def outOfTime(self):
         return time.time() > self.startTime + (self.maxMinutes * 60)
+    def buildActionOperation(self):
+        with self.graph.as_default():
+            (
+                actionsChosen,
+                rawAction,
+                actionMean,
+                uncleanedActionVariance,
+                logScaleActionVariance,
+                actionVariance,
+                entropy,
+                logProb
+            ) = self.policyNetwork.buildNetwork(self.statePh)
+            qAssessment = self.qNetwork1.buildNetwork(self.statePh, actionsChosen)
+            self.actionOperations = [
+                actionsChosen,
+                qAssessment
+            ]
+    def buildGraphingOperation(self):
+        with self.graph.as_default():
+            (
+                actionsChosen,
+                rawAction,
+                actionMean,
+                uncleanedActionVariance,
+                logScaleActionVariance,
+                actionVariance,
+                entropy,
+                logProb
+            ) = self.policyNetwork.buildNetwork(self.statePh)
+            qAssessment = self.qNetwork1.buildNetwork(self.statePh, actionsChosen)
+            valueAssessment = self.learnedValueNetwork.buildNetwork(self.statePh)
+            self.graphingOperations = [
+                actionsChosen,
+                qAssessment,
+                valueAssessment
+            ]
     def goToNextState(self):
         (
             actionsChosen,
-            logScaleActionVariance,
-            logProb,
-            entropy
-        ) = self.policyNetwork.getAction(self.state)
-        self.qNetwork1.storeAssessment(self.state, actionsChosen)
-        self.qNetwork2.storeAssessment(self.state, actionsChosen)
-        nextState, reward, done, info = self.env.step((actionsChosen + self.actionShift) * self.actionScaling)
+            qAssessment
+        ) = self.sess.run(
+            self.actionOperations,
+            feed_dict={
+                self.statePh: [self.state]
+            }
+        )
+        actionsChosen = actionsChosen[0]
+        nextState, reward, done, info = self.env.step(actionsChosen * self.actionScaling)
+        nextState = np.reshape(nextState, [self.numStateVariables,])
         done = False
         if (self.render):
             self.env.render()
@@ -207,66 +329,89 @@ class Agent:
         if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining:
             self.train()
         return done
+    def buildTrainingOperation(self):
+        self.qNetwork1.setValueNetwork(self.targetValueNetwork)
+        self.qNetwork1.setPolicyNetwork(self.policyNetwork)
+        (
+            qNetwork1Training
+        ) = self.qNetwork1.buildTrainingOperation()
+
+        self.qNetwork2.setValueNetwork(self.targetValueNetwork)
+        self.qNetwork2.setPolicyNetwork(self.policyNetwork)
+        (
+            qNetwork2Training
+        ) = self.qNetwork2.buildTrainingOperation()
+
+        self.learnedValueNetwork.setNetworks(self.policyNetwork, self.qNetwork1, self.qNetwork2)
+        (
+            learnedValueTraining
+        ) = self.learnedValueNetwork.buildTrainingOperation()
+
+        self.targetValueNetwork.setNetworks(self.policyNetwork, self.qNetwork1, self.qNetwork2)
+
+        self.policyNetwork.setQNetwork(self.qNetwork1)
+        (
+            policyTraining
+        ) = self.policyNetwork.buildTrainingOperation()
+
+        softCopy = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork, self.tau)
+
+        self.trainingOperations = [
+            qNetwork1Training,
+            qNetwork2Training,
+            learnedValueTraining,
+            policyTraining,
+            softCopy
+        ]
+
+        self.copyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork, 1)
     def train(self):
         trainingMemories = self.memoryBuffer.getMemoryBatch()
-
-        start = time.time()
-        qOneTargets = self.qNetwork1.getTargets(trainingMemories)
-        qTwoTargets = self.qNetwork2.getTargets(trainingMemories)
-        self.getQTargetsOverTime.append(time.time() - start)
-
-        start = time.time()
-        valueTargets = self.targetValueNetwork.getTargets(trainingMemories)
-        self.getValueTargetsOverTime.append(time.time() - start)
-
-        start = time.time()
-        self.qNetwork1.trainAgainst(trainingMemories, qOneTargets)
-        self.qNetwork2.trainAgainst(trainingMemories, qTwoTargets)
-        self.trainQOverTime.append(time.time() - start)
-
-        start = time.time()
-        self.learnedValueNetwork.trainAgainst(trainingMemories, valueTargets)
-        self.sess.run(self.softCopyLearnedNetwork)
-        self.trainValueOverTime.append(time.time() - start)
-
-        start = time.time()
-        self.policyNetwork.trainAgainst(trainingMemories)
-        self.trainPolicyOverTime.append(time.time() - start)
-    def updateGraphs(self):
-        self.qNetwork1.updateGraphs()
-        self.qNetwork2.updateGraphs()
-        self.learnedValueNetwork.updateGraphs()
-        # self.targetValueNetwork.updateGraphs()
-        self.policyNetwork.updateGraphs()
-
-        self.timersPlot.cla()
-        self.timersPlot.set_title("Timing")
-        self.timersPlot.plot(self.getQTargetsOverTime, label="Q Targets")
-        self.timersPlot.plot(self.getValueTargetsOverTime, label="Value Targets")
-        self.timersPlot.plot(self.trainQOverTime, label="Train Q")
-        self.timersPlot.plot(self.trainValueOverTime, label="Train Value")
-        self.timersPlot.plot(self.trainPolicyOverTime, label="Train Policy")
-        self.timersPlot.legend(loc=2)
-
-        self.rewardsPlot.cla()
-        self.rewardsPlot.set_title("Rewards")
-        self.rewardsPlot.plot(self.rewardsOverTime, label="Rewards")
-        plt.pause(0.00001)
+        (
+            qNetwork1Training,
+            qNetwork2Training,
+            learnedValueTraining,
+            policyTraining,
+            softCopy
+        ) = self.sess.run(
+            self.trainingOperations,
+            feed_dict={
+                self.statePh: util.getColumn(trainingMemories, constants.STATE),
+                self.nextStatePh: util.getColumn(trainingMemories, constants.NEXT_STATE),
+                self.actionsPh: util.getColumn(trainingMemories, constants.ACTION),
+                self.terminalsPh: util.getColumn(trainingMemories, constants.IS_TERMINAL),
+                self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD),
+                self.policyNetwork.entropyCoefficientPh: self.entropyCoefficient
+            }
+        )
+    def updateFps(self):
+        newTime = time.time()
+        timeSpent = newTime - self.lastTime
+        framesRendered = self.globalStep - self.lastGlobalStep 
+        fps = framesRendered / timeSpent
+        self.lastGlobalStep = self.globalStep
+        self.lastTime = newTime
+        self.fpsOverTime.append(fps)
+        return fps
     def execute(self):
-        self.sess.run(tf.global_variables_initializer())
+        with self.graph.as_default():
+            self.sess.run(tf.global_variables_initializer())
         self.sess.run(self.copyLearnedNetwork)
         self.globalStep = 0
         for episodeNum in range(self.maxEpisodes):
             if self.outOfTime():
                 break
-            self.state = self.env.reset()
+            state = self.env.reset()
+            self.state = np.reshape(state, [self.numStateVariables,])
             self.totalEpisodeReward = 0
             for stepNum in range(self.trainSteps):
                 self.goToNextState()
-            self.rewardsOverTime.append(self.totalEpisodeReward)
+            fps = self.updateFps()
             if self.showGraphs:
                 self.updateGraphs()
-        self.state = self.env.reset()
+            # print("Reward: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
+        state = self.env.reset()
+        self.state = np.reshape(state, [self.numStateVariables,])
         self.totalEpisodeReward = 0
         for stepNum in range(self.testSteps):
             self.goToNextState()

@@ -8,54 +8,49 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "soft-actor-critic-with-added-exploration"
+experimentName = "soft-actor-critic-turbo"
 
 entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2.0)
 learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2.0)
 rewardScalingArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2.0)
-actionScalingArg = ng.instrumentation.variables.Gaussian(mean=0.5, std=1.0)
 weightRegularizationConstantArg = ng.instrumentation.variables.Gaussian(mean=-2, std=.25)
-epsilonDecayArg = ng.instrumentation.variables.Gaussian(mean=-5, std=1.0)
 
-instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, actionScalingArg, weightRegularizationConstantArg, epsilonDecayArg)
+instrumentation = ng.Instrumentation(entropyCoefficientArg, learningRateArg, rewardScalingArg, weightRegularizationConstantArg)
 optimizer = ng.optimizers.registry["TBPSA"](instrumentation=instrumentation, budget=os.environ['BUDGET'])
 
-cur.execute("select x1, x2, x3, x4, x5, x6, y from experiments where label = '"+experimentName+"'")
+cur.execute("select x1, x2, x3, x4, y from experiments where label = '"+experimentName+"'")
 result = cur.fetchall()
 for row in result:
     candidate = optimizer.create_candidate.from_call(
         np.log10(float(row[0])),
         np.log10(float(row[1])),
         np.log10(float(row[2])),
-        np.log10(float(row[3])),
-        np.log10(float(row[4])),
-        np.log10(1.0 - float(row[5]))
+        np.log10(float(row[3]))
     )
-    optimizer.tell(candidate, -float(row[6]))
+    optimizer.tell(candidate, -float(row[4]))
 
 nextTest = optimizer.ask()
 
 entropyCoefficient = 10 ** nextTest.args[0]
 learningRate = 10 ** nextTest.args[1]
 rewardScaling = 10 ** nextTest.args[2]
-actionScaling = 10 ** nextTest.args[3]
-weightRegularizationConstant = 10 ** nextTest.args[4]
-epsilonDecay = 1 - (10 ** nextTest.args[5])
+weightRegularizationConstant = 10 ** nextTest.args[3]
 result = -20000
 
 try:
     agent = Agent(
         name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
-        policyNetworkSize=[64, 64],
-        qNetworkSize=[64, 64],
-        valueNetworkSize=[64, 64],
+        actionScaling=2.0,
+        policyNetworkSize=[256, 256],
+        qNetworkSize=[256, 256],
+        valueNetworkSize=[256, 256],
         entropyCoefficient=entropyCoefficient,
         valueNetworkLearningRate=learningRate,
         policyNetworkLearningRate=learningRate,
         qNetworkLearningRate=learningRate,
         tau=0.005,
         gamma=0.99,
-        maxMemoryLength=int(1e6),
+        maxMemoryLength=50000,
         priorityExponent=0,
         batchSize=64,
         maxGradientNorm=5,
@@ -63,18 +58,17 @@ try:
         trainSteps=1024,
         minStepsBeforeTraining=4096,
         rewardScaling=rewardScaling,
-        actionScaling=actionScaling,
         actionShift=0.0,
         stepsPerUpdate=1,
         render=False,
-        showGraphs=False,
+        showGraphs=True,
         meanRegularizationConstant=weightRegularizationConstant,
         varianceRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
-        maxMinutes=15,
+        maxMinutes=5,
         theta=0.15,
         sigma=.2,
-        epsilonDecay=epsilonDecay,
+        epsilonDecay=.99999,
         epsilonInitial=1.0
     )
 
@@ -87,9 +81,9 @@ cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9,
         entropyCoefficient,
         learningRate,
         rewardScaling,
-        actionScaling,
         weightRegularizationConstant,
-        epsilonDecay,
+        0,
+        0,
         0,
         0,
         0,
