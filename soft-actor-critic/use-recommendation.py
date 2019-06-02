@@ -8,7 +8,7 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "soft-actor-critic-400"
+experimentName = "soft-actor-critic-fixed-entropy"
 
 entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2)
 learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2)
@@ -44,9 +44,9 @@ result = -20000
 try:
     agent = Agent(
         name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
-        policyNetworkSize=[64, 64],
-        qNetworkSize=[64, 64],
-        valueNetworkSize=[64, 64],
+        policyNetworkSize=[256, 256],
+        qNetworkSize=[256, 256],
+        valueNetworkSize=[256, 256],
         entropyCoefficient=entropyCoefficient,
         valueNetworkLearningRate=learningRate,
         policyNetworkLearningRate=learningRate,
@@ -66,9 +66,10 @@ try:
         stepsPerUpdate=1,
         render=True,
         showGraphs=True,
-        weightRegularizationConstant=weightRegularizationConstant,
+        meanRegularizationConstant=weightRegularizationConstant,
+        varianceRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
-        maxMinutes=15
+        maxMinutes=600
     )
 
     result = agent.execute()

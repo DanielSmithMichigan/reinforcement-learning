@@ -13,3 +13,5 @@ PRIORITY = 9
 POSITION = 10
 
 ACTION_NAMES = ["noop", "right", "main", "left"]
+
+IMAGE_SIZE = 200
