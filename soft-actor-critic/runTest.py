@@ -61,7 +61,7 @@ try:
         actionShift=0.0,
         stepsPerUpdate=1,
         render=False,
-        showGraphs=True,
+        showGraphs=False,
         meanRegularizationConstant=weightRegularizationConstant,
         varianceRegularizationConstant=weightRegularizationConstant,
         testSteps=1024,
