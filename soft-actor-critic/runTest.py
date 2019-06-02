@@ -8,7 +8,7 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "soft-actor-critic-turbo"
+experimentName = "soft-actor-critic-turbo-limited"
 
 entropyCoefficientArg = ng.instrumentation.variables.Gaussian(mean=-2, std=2.0)
 learningRateArg = ng.instrumentation.variables.Gaussian(mean=-3, std=2.0)
