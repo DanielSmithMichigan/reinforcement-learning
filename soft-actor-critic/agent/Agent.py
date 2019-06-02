@@ -22,14 +22,12 @@ from . import util
 from .prioritized_experience_replay import PrioritizedExperienceReplay
 from .simple_experience_replay import SimpleExperienceReplay
 
-
 class Agent:
     def __init__(self,
             name,
             policyNetworkSize,
             qNetworkSize,
             valueNetworkSize,
-            entropyCoefficient,
             valueNetworkLearningRate,
             policyNetworkLearningRate,
             qNetworkLearningRate,
@@ -38,7 +36,6 @@ class Agent:
             maxMemoryLength,
             priorityExponent,
             batchSize,
-            maxGradientNorm,
             maxEpisodes,
             trainSteps,
             rewardScaling,
@@ -48,19 +45,13 @@ class Agent:
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
-            meanRegularizationConstant,
-            varianceRegularizationConstant,
             testSteps,
             maxMinutes,
-            theta,
-            sigma,
-            epsilonDecay,
-            epsilonInitial
+            targetEntropy
         ):
         self.graph = tf.Graph()
         self.numStateVariables = 3
         self.numActions = 1
-        self.entropyCoefficient = entropyCoefficient
         self.batchSize = batchSize
         self.tau = tau
         with self.graph.as_default():
@@ -80,9 +71,7 @@ class Agent:
             name="LearnedValueNetwork_"+name,
             numStateVariables=self.numStateVariables,
             networkSize=valueNetworkSize,
-            entropyCoefficient=entropyCoefficient,
             learningRate=valueNetworkLearningRate,
-            maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
             numActions=self.numActions,
             showGraphs=showGraphs,
@@ -94,9 +83,7 @@ class Agent:
             graph=self.graph,
             numStateVariables=self.numStateVariables,
             networkSize=valueNetworkSize,
-            entropyCoefficient=entropyCoefficient,
             learningRate=valueNetworkLearningRate,
-            maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
             numActions=self.numActions,
             showGraphs=showGraphs,
@@ -112,7 +99,6 @@ class Agent:
             networkSize=qNetworkSize,
             gamma=gamma,
             learningRate=qNetworkLearningRate,
-            maxGradientNorm=maxGradientNorm,
             showGraphs=showGraphs,
             statePh=self.statePh,
             nextStatePh=self.nextStatePh,
@@ -129,7 +115,6 @@ class Agent:
             networkSize=qNetworkSize,
             gamma=gamma,
             learningRate=qNetworkLearningRate,
-            maxGradientNorm=maxGradientNorm,
             showGraphs=showGraphs,
             statePh=self.statePh,
             nextStatePh=self.nextStatePh,
@@ -145,14 +130,11 @@ class Agent:
             numStateVariables=self.numStateVariables,
             numActions=self.numActions,
             networkSize=policyNetworkSize,
-            entropyCoefficient=entropyCoefficient,
             learningRate=policyNetworkLearningRate,
-            maxGradientNorm=maxGradientNorm,
             batchSize=batchSize,
-            meanRegularizationConstant=meanRegularizationConstant,
-            varianceRegularizationConstant=varianceRegularizationConstant,
             showGraphs=showGraphs,
-            statePh=self.statePh
+            statePh=self.statePh,
+            targetEntropy=targetEntropy
         )
 
         self.buildTrainingOperation()
@@ -221,13 +203,20 @@ class Agent:
                 y = yImg - imageRadius
                 v = np.clip(math.sqrt(x * x + y * y) * 16 / imageRadius, 0, 16)
                 v = v - 8
-                theta = math.atan(y / x) if x != 0 else math.pi / 2
-                if x < 0 and y > 0:
-                    theta = theta + math.pi
-                elif x < 0 and y < 0:
-                    theta = theta + math.pi
+
+                theta = None
+                if x < 0:
+                    theta = math.atan(y / x) + math.pi
+                elif x == 0 and y > 0:
+                    theta = math.pi
+                elif x == 0 and y < 0:
+                    theta = -math.pi
+                elif x == 0 and y == 0:
+                    theta = 0
                 elif x > 0 and y < 0:
-                    theta = theta + math.pi + math.pi
+                    theta = math.atan(y / x) + math.pi + math.pi
+                else:
+                    theta = math.atan(y / x)
                 states.append([math.cos(theta), math.sin(theta), v])
         (
             actionsChosen,
@@ -272,12 +261,15 @@ class Agent:
                 logScaleActionVariance,
                 actionVariance,
                 entropy,
-                logProb
+                logProb,
+                deterministicActionChosen
             ) = self.policyNetwork.buildNetwork(self.statePh)
             qAssessment = self.qNetwork1.buildNetwork(self.statePh, actionsChosen)
             self.actionOperations = [
+                rawAction,
                 actionsChosen,
-                qAssessment
+                qAssessment,
+                deterministicActionChosen
             ]
     def buildGraphingOperation(self):
         with self.graph.as_default():
@@ -289,7 +281,8 @@ class Agent:
                 logScaleActionVariance,
                 actionVariance,
                 entropy,
-                logProb
+                logProb,
+                deterministicActionChosen
             ) = self.policyNetwork.buildNetwork(self.statePh)
             qAssessment = self.qNetwork1.buildNetwork(self.statePh, actionsChosen)
             valueAssessment = self.learnedValueNetwork.buildNetwork(self.statePh)
@@ -298,17 +291,19 @@ class Agent:
                 qAssessment,
                 valueAssessment
             ]
-    def goToNextState(self):
+    def goToNextState(self,deterministic=False):
         (
+            rawAction,
             actionsChosen,
-            qAssessment
+            qAssessment,
+            deterministicAction
         ) = self.sess.run(
             self.actionOperations,
             feed_dict={
                 self.statePh: [self.state]
             }
         )
-        actionsChosen = actionsChosen[0]
+        actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
         nextState, reward, done, info = self.env.step(actionsChosen * self.actionScaling)
         nextState = np.reshape(nextState, [self.numStateVariables,])
         done = False
@@ -351,7 +346,8 @@ class Agent:
 
         self.policyNetwork.setQNetwork(self.qNetwork1)
         (
-            policyTraining
+            policyTrainingOperation,
+            entropyCoefficientTrainingOperation
         ) = self.policyNetwork.buildTrainingOperation()
 
         softCopy = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork, self.tau)
@@ -360,11 +356,12 @@ class Agent:
             qNetwork1Training,
             qNetwork2Training,
             learnedValueTraining,
-            policyTraining,
+            policyTrainingOperation,
+            entropyCoefficientTrainingOperation,
             softCopy
         ]
 
-        self.copyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork, 1)
+        self.copyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork, 1.0)
     def train(self):
         trainingMemories = self.memoryBuffer.getMemoryBatch()
         (
@@ -372,6 +369,7 @@ class Agent:
             qNetwork2Training,
             learnedValueTraining,
             policyTraining,
+            entropyCoefficientTrainingOperation,
             softCopy
         ) = self.sess.run(
             self.trainingOperations,
@@ -380,8 +378,7 @@ class Agent:
                 self.nextStatePh: util.getColumn(trainingMemories, constants.NEXT_STATE),
                 self.actionsPh: util.getColumn(trainingMemories, constants.ACTION),
                 self.terminalsPh: util.getColumn(trainingMemories, constants.IS_TERMINAL),
-                self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD),
-                self.policyNetwork.entropyCoefficientPh: self.entropyCoefficient
+                self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD)
             }
         )
     def updateFps(self):
@@ -409,12 +406,12 @@ class Agent:
             fps = self.updateFps()
             if self.showGraphs:
                 self.updateGraphs()
-            # print("Reward: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
+            print("Reward: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
         state = self.env.reset()
         self.state = np.reshape(state, [self.numStateVariables,])
         self.totalEpisodeReward = 0
         for stepNum in range(self.testSteps):
-            self.goToNextState()
+            self.goToNextState(deterministic=True)
         return self.totalEpisodeReward
             
 

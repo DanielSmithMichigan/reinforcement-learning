@@ -17,9 +17,7 @@ class ValueNetwork:
             name,
             numStateVariables,
             networkSize,
-            entropyCoefficient,
             learningRate,
-            maxGradientNorm,
             batchSize,
             numActions,
             showGraphs,
@@ -30,9 +28,7 @@ class ValueNetwork:
         self.name = name
         self.numStateVariables = numStateVariables
         self.networkSize = networkSize
-        self.entropyCoefficient = entropyCoefficient
         self.learningRate = learningRate
-        self.maxGradientNorm = maxGradientNorm
         self.batchSize = batchSize
         self.numActions = numActions
         self.statePh = statePh
@@ -80,26 +76,18 @@ class ValueNetwork:
                 _,
                 _,
                 _,
-                logProb
+                logProb,
+                _
             ) = self.policyNetwork.buildNetwork(self.statePh)
             minQValue = tf.minimum(
                 self.qNetwork1.buildNetwork(self.statePh, actionsChosen),
                 self.qNetwork2.buildNetwork(self.statePh, actionsChosen)
             )
-            entropyValue = tf.reshape(self.entropyCoefficient * logProb, [-1, 1])
-            targetValue = minQValue - entropyValue
-            value = self.buildNetwork(self.statePh)
-            loss = tf.reduce_mean(tf.pow(value - tf.stop_gradient(targetValue), 2))
+            minQValue = tf.reshape(minQValue, [-1])
+            targetValue = tf.stop_gradient(minQValue - self.policyNetwork.entropyCoefficient * logProb)
+            predictedValue = self.buildNetwork(self.statePh)
+            predictedValue = tf.reshape(predictedValue, [-1])
+            loss = 0.5 * tf.reduce_mean((predictedValue - targetValue) ** 2)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
-            uncappedGradients, variables = zip(
-                *optimizer.compute_gradients(
-                    loss,
-                    var_list=tf.trainable_variables(scope=self.name)
-                )
-            )
-            (
-                cappedGradients,
-                gradientNorm
-            ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
-            return optimizer.apply_gradients(zip(cappedGradients, variables))
+            return optimizer.minimize(loss, var_list=tf.trainable_variables(scope=self.name))
 

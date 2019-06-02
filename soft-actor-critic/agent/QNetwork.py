@@ -16,7 +16,6 @@ class QNetwork:
             networkSize,
             gamma,
             learningRate,
-            maxGradientNorm,
             showGraphs,
             statePh,
             nextStatePh,
@@ -37,7 +36,6 @@ class QNetwork:
         self.networkSize = networkSize
         self.gamma = gamma
         self.learningRate = learningRate
-        self.maxGradientNorm = maxGradientNorm
         self.storedTargets = None
     def buildNetwork(self, state, actions):
         qValue = None
@@ -71,22 +69,15 @@ class QNetwork:
         self.policyNetwork = policyNetwork
     def buildTrainingOperation(self):
         with self.graph.as_default():
-            reshapedValue = tf.reshape(self.valueNetwork.buildNetwork(self.nextStatePh), [-1])
-            targetQ = self.rewardsPh + self.gamma * (1 - self.terminalsPh) * tf.stop_gradient(reshapedValue)
+            targetValue = self.valueNetwork.buildNetwork(self.nextStatePh)
+            targetValue = tf.reshape(targetValue, [-1])
+            targetQ = tf.stop_gradient(self.rewardsPh + self.gamma * (1 - self.terminalsPh) * targetValue)
             predictedQ = self.buildNetwork(self.statePh, self.actionsPh)
-            loss = tf.reduce_mean(tf.pow(predictedQ - targetQ, 2))
+            predictedQ = tf.reshape(predictedQ, [-1])
+            absDiff = targetQ - predictedQ
+            loss = .5 * tf.reduce_mean(absDiff ** 2)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
-            uncappedGradients, variables = zip(
-                *optimizer.compute_gradients(
-                    loss,
-                    var_list=tf.trainable_variables(scope=self.name)
-                )
-            )
-            (
-                cappedGradients,
-                self.gradientNorm
-            ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
-            return optimizer.apply_gradients(zip(cappedGradients, variables))
+            return optimizer.minimize(loss, var_list=tf.trainable_variables(scope=self.name))
     def buildAssessmentOperation(self, actions):
         with self.graph.as_default():
             self.assessmentOperation = self.buildNetwork(self.statePh, actions)
