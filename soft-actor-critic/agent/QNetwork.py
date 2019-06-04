@@ -69,13 +69,12 @@ class QNetwork:
         self.policyNetwork = policyNetwork
     def buildTrainingOperation(self):
         with self.graph.as_default():
-            targetValue = self.valueNetwork.buildNetwork(self.nextStatePh)
-            targetValue = tf.reshape(targetValue, [-1])
-            targetQ = tf.stop_gradient(self.rewardsPh + self.gamma * (1 - self.terminalsPh) * targetValue)
+            reshapedValue = tf.reshape(self.valueNetwork.buildNetwork(self.nextStatePh), [-1])
+            targetQ = self.rewardsPh + self.gamma * (1 - self.terminalsPh) * tf.stop_gradient(reshapedValue)
             predictedQ = self.buildNetwork(self.statePh, self.actionsPh)
             predictedQ = tf.reshape(predictedQ, [-1])
             absDiff = targetQ - predictedQ
-            loss = .5 * tf.reduce_mean(absDiff ** 2)
+            loss = 0.5 * tf.reduce_mean(absDiff ** 2)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
             return optimizer.minimize(loss, var_list=tf.trainable_variables(scope=self.name))
     def buildAssessmentOperation(self, actions):

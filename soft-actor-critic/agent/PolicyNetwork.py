@@ -26,8 +26,7 @@ def gaussian_likelihood(input_, mu_, log_std):
     :param log_std: (tf.Tensor)
     :return: (tf.Tensor)
     """
-    pre_sum = -0.5 * (((input_ - mu_) / (tf.exp(log_std) + EPS)) ** 2 + 2 * log_std + np.log(2 * np.pi))
-    return tf.reduce_sum(pre_sum, axis=1)
+    return -0.5 * (((input_ - mu_) / (tf.exp(log_std) + EPS)) ** 2 + 2 * log_std + np.log(2 * np.pi))
 
 
 def gaussian_entropy(log_std):
@@ -137,9 +136,10 @@ class PolicyNetwork:
                 actionVariance = tf.exp(logScaleActionVariance)
                 randoms = tf.random.normal(tf.shape(actionMean))
                 rawAction = actionMean + (randoms * actionVariance)
-                logProb = gaussian_likelihood(rawAction, actionMean, logScaleActionVariance)
+                actionsChosen = tf.nn.tanh(rawAction)
+                logProb =  tf.reduce_sum(gaussian_likelihood(rawAction, actionMean, logScaleActionVariance) - tf.log(clip_but_pass_gradient(1 - actionsChosen ** 2, lower=0, upper=1) + EPS), axis=1)
                 entropy = gaussian_entropy(logScaleActionVariance)
-                deterministicActionChosen, actionsChosen, logProb = apply_squashing_func(actionMean, rawAction, logProb)
+                deterministicActionChosen = actionMean
         return (
             actionsChosen,
             rawAction,
@@ -176,8 +176,9 @@ class PolicyNetwork:
 
             #Policy
             qValue = self.qNetwork.buildNetwork(self.statePh, actionsChosen)
-            qValue = tf.reshape(qValue, [-1])
-            batchLoss = self.entropyCoefficient * logProb - qValue
+            qCost = -tf.reshape(qValue, [-1])
+            entropyCost = tf.stop_gradient(self.entropyCoefficient) * logProb
+            batchLoss = entropyCost + qCost
             loss = tf.reduce_mean(
                 batchLoss
             )
