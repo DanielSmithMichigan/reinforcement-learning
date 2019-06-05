@@ -48,7 +48,8 @@ class Agent:
             actionShift,
             testSteps,
             maxMinutes,
-            targetEntropy
+            targetEntropy,
+            maxGradientNorm
         ):
         self.graph = tf.Graph()
         self.numStateVariables = 3
@@ -76,7 +77,8 @@ class Agent:
             batchSize=batchSize,
             numActions=self.numActions,
             showGraphs=showGraphs,
-            statePh=self.statePh
+            statePh=self.statePh,
+            maxGradientNorm=maxGradientNorm
         )
         self.targetValueNetwork = ValueNetwork(
             name="TargetValueNetwork_"+name,
@@ -88,7 +90,8 @@ class Agent:
             batchSize=batchSize,
             numActions=self.numActions,
             showGraphs=showGraphs,
-            statePh=self.statePh
+            statePh=self.statePh,
+            maxGradientNorm=maxGradientNorm
         )
 
         self.qNetwork1 = QNetwork(
@@ -105,7 +108,8 @@ class Agent:
             nextStatePh=self.nextStatePh,
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
-            terminalsPh=self.terminalsPh
+            terminalsPh=self.terminalsPh,
+            maxGradientNorm=maxGradientNorm
         )
         self.qNetwork2 = QNetwork(
             sess=self.sess,
@@ -121,7 +125,8 @@ class Agent:
             nextStatePh=self.nextStatePh,
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
-            terminalsPh=self.terminalsPh
+            terminalsPh=self.terminalsPh,
+            maxGradientNorm=maxGradientNorm
         )
 
         self.policyNetwork = PolicyNetwork(
@@ -136,7 +141,8 @@ class Agent:
             showGraphs=showGraphs,
             statePh=self.statePh,
             targetEntropy=targetEntropy,
-            entropyCoefficient=entropyCoefficient
+            entropyCoefficient=entropyCoefficient,
+            maxGradientNorm=maxGradientNorm
         )
 
         self.buildTrainingOperation()
@@ -169,6 +175,18 @@ class Agent:
         self.testSteps = testSteps
         self.maxMinutes = maxMinutes
         self.fpsOverTime = deque([], 400)
+        self.episodeRewards = deque([], 400)
+        self.actionsChosen = deque([], 400)
+        self.q1Loss = deque([], 400)
+        self.q2Loss = deque([], 400)
+        self.valueLoss = deque([], 400)
+        self.entropyCoefficientLoss = deque([], 400)
+        self.q1RegTerm = deque([], 400)
+        self.q2RegTerm = deque([], 400)
+        self.valueRegTerm = deque([], 400)
+        self.policyRegTerm = deque([], 400)
+        self.entropyCoefficientOverTime = deque([], 400)
+        self.entropyOverTime = deque([], 400)
         self.lastGlobalStep = 0
         self.lastTime = time.time()
         if showGraphs:
@@ -192,10 +210,72 @@ class Agent:
         self.policyGraph = self.policyFigure.add_subplot(1, 1, 1)
         divider = make_axes_locatable(self.policyGraph)
         self.policyColorBar = divider.append_axes("right", size="7%", pad="2%")
+
+        self.overview = plt.figure()
+        self.overview.suptitle("Overview")
+        self.episodeRewardsGraph = self.overview.add_subplot(4, 1, 1)
+        self.fpsOverTimeGraph = self.overview.add_subplot(4, 1, 2)
+        self.actionsChosenGraph = self.overview.add_subplot(4, 1, 3)
+        self.entropyOverTimeGraph = self.overview.add_subplot(4, 1, 4)
+    
+        self.lossFigure = plt.figure()
+        self.lossGraph = self.lossFigure.add_subplot(4, 1, 1)
+        self.entropyCoefficientLossGraph = self.lossFigure.add_subplot(4, 1, 2)
+        self.regTermGraph = self.lossFigure.add_subplot(4, 1, 3)
+        self.entropyCoefficientGraph = self.lossFigure.add_subplot(4, 1, 4)
     def updateGraphs(self):
         self.updateEvalGraphs()
+        self.updateOverviewGraphs()
+        self.updateLossGraphs()
 
         plt.pause(0.0001)
+    def updateOverviewGraphs(self):
+
+        self.episodeRewardsGraph.cla()
+        self.episodeRewardsGraph.set_title("Rewards")
+        self.episodeRewardsGraph.plot(self.episodeRewards, label="Rewards")
+
+        self.fpsOverTimeGraph.cla()
+        self.fpsOverTimeGraph.set_title("FPS")
+        self.fpsOverTimeGraph.plot(self.fpsOverTime, label="FPS")
+
+        self.actionsChosenGraph.cla()
+        self.actionsChosenGraph.set_title("ActionsChosen")
+        for i in range(self.numActions):
+            self.actionsChosenGraph.plot(util.getColumn(self.actionsChosen, i), label=constants.ACTION_NAMES[i])
+        self.actionsChosenGraph.legend(loc=2)
+
+        self.entropyOverTimeGraph.cla()
+        self.entropyOverTimeGraph.set_title("Entropy")
+        self.entropyOverTimeGraph.plot(self.entropyOverTime, label="Entropy")
+
+        self.overview.canvas.draw()
+    def updateLossGraphs(self):
+        self.lossGraph.cla()
+        self.lossGraph.set_title("Loss")
+        self.lossGraph.plot(self.q1Loss, label="q1")
+        self.lossGraph.plot(self.q2Loss, label="q2")
+        self.lossGraph.plot(self.valueLoss, label="value")
+        self.lossGraph.legend(loc=2)
+
+        self.entropyCoefficientLossGraph.cla()
+        self.entropyCoefficientLossGraph.set_title("Entropy Coefficient")
+        self.entropyCoefficientLossGraph.plot(self.entropyCoefficientLoss, label="entropyCoefficient")
+        self.entropyCoefficientLossGraph.legend(loc=2)
+
+        self.regTermGraph.cla()
+        self.regTermGraph.set_title("Reg Term")
+        self.regTermGraph.plot(self.q1RegTerm, label="q1")
+        self.regTermGraph.plot(self.q2RegTerm, label="q2")
+        self.regTermGraph.plot(self.valueRegTerm, label="value")
+        self.regTermGraph.plot(self.policyRegTerm, label="policy")
+        self.regTermGraph.legend(loc=2)
+
+        self.entropyCoefficientGraph.cla()
+        self.entropyCoefficientGraph.set_title("Entropy Coefficient")
+        self.entropyCoefficientGraph.plot(self.entropyCoefficientOverTime, label="Entropy Coefficient")
+
+        self.lossFigure.canvas.draw()
     def updateEvalGraphs(self):
         states = []
         imageRadius = constants.IMAGE_SIZE / 2
@@ -271,7 +351,8 @@ class Agent:
                 rawAction,
                 actionsChosen,
                 qAssessment,
-                deterministicActionChosen
+                deterministicActionChosen,
+                entropy
             ]
     def buildGraphingOperation(self):
         with self.graph.as_default():
@@ -298,7 +379,8 @@ class Agent:
             rawAction,
             actionsChosen,
             qAssessment,
-            deterministicAction
+            deterministicAction,
+            entropy
         ) = self.sess.run(
             self.actionOperations,
             feed_dict={
@@ -306,7 +388,10 @@ class Agent:
             }
         )
         actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
-        nextState, reward, done, info = self.env.step(actionsChosen * self.actionScaling)
+        actionsChosen = actionsChosen * self.actionScaling
+        self.actionsChosen.append(actionsChosen)
+        self.entropyOverTime.append(entropy)
+        nextState, reward, done, info = self.env.step(actionsChosen)
         nextState = np.reshape(nextState, [self.numStateVariables,])
         done = False
         if (self.render):
@@ -330,18 +415,24 @@ class Agent:
         self.qNetwork1.setValueNetwork(self.targetValueNetwork)
         self.qNetwork1.setPolicyNetwork(self.policyNetwork)
         (
-            qNetwork1Training
+            qNetwork1Training,
+            q1Loss,
+            q1RegTerm
         ) = self.qNetwork1.buildTrainingOperation()
 
         self.qNetwork2.setValueNetwork(self.targetValueNetwork)
         self.qNetwork2.setPolicyNetwork(self.policyNetwork)
         (
-            qNetwork2Training
+            qNetwork2Training,
+            q2Loss,
+            q2RegTerm
         ) = self.qNetwork2.buildTrainingOperation()
 
         self.learnedValueNetwork.setNetworks(self.policyNetwork, self.qNetwork1, self.qNetwork2)
         (
-            learnedValueTraining
+            learnedValueTraining,
+            valueLoss,
+            valueRegTerm
         ) = self.learnedValueNetwork.buildTrainingOperation()
 
         self.targetValueNetwork.setNetworks(self.policyNetwork, self.qNetwork1, self.qNetwork2)
@@ -349,7 +440,10 @@ class Agent:
         self.policyNetwork.setQNetwork(self.qNetwork1)
         (
             policyTrainingOperation,
-            entropyCoefficientTrainingOperation
+            entropyCoefficientTrainingOperation,
+            policyRegTerm,
+            entropyCoefficientLoss,
+            entropyCoefficient
         ) = self.policyNetwork.buildTrainingOperation()
 
         softCopy = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork, self.tau)
@@ -360,7 +454,16 @@ class Agent:
             learnedValueTraining,
             policyTrainingOperation,
             entropyCoefficientTrainingOperation,
-            softCopy
+            softCopy,
+            q1Loss,
+            q1RegTerm,
+            q2Loss,
+            q2RegTerm,
+            valueLoss,
+            valueRegTerm,
+            policyRegTerm,
+            entropyCoefficientLoss,
+            entropyCoefficient
         ]
 
         self.copyLearnedNetwork = self.targetValueNetwork.buildSoftCopyOperation(self.learnedValueNetwork, 1.0)
@@ -372,7 +475,16 @@ class Agent:
             learnedValueTraining,
             policyTraining,
             entropyCoefficientTrainingOperation,
-            softCopy
+            softCopy,
+            q1Loss,
+            q1RegTerm,
+            q2Loss,
+            q2RegTerm,
+            valueLoss,
+            valueRegTerm,
+            policyRegTerm,
+            entropyCoefficientLoss,
+            entropyCoefficient
         ) = self.sess.run(
             self.trainingOperations,
             feed_dict={
@@ -383,6 +495,15 @@ class Agent:
                 self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD)
             }
         )
+        self.q1Loss.append(q1Loss)
+        self.q2Loss.append(q2Loss)
+        self.valueLoss.append(valueLoss)
+        self.q1RegTerm.append(q1RegTerm)
+        self.q2RegTerm.append(q2RegTerm)
+        self.valueRegTerm.append(valueRegTerm)
+        self.policyRegTerm.append(policyRegTerm)
+        self.entropyCoefficientLoss.append(entropyCoefficientLoss)
+        self.entropyCoefficientOverTime.append(entropyCoefficient)
     def updateFps(self):
         newTime = time.time()
         timeSpent = newTime - self.lastTime
@@ -405,10 +526,11 @@ class Agent:
             self.totalEpisodeReward = 0
             for stepNum in range(self.trainSteps):
                 self.goToNextState()
+            self.episodeRewards.append(self.totalEpisodeReward)
             fps = self.updateFps()
+            print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
             if self.showGraphs:
                 self.updateGraphs()
-            print("Reward: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
         state = self.env.reset()
         self.state = np.reshape(state, [self.numStateVariables,])
         self.totalEpisodeReward = 0

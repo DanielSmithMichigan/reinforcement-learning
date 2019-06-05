@@ -81,7 +81,8 @@ class PolicyNetwork:
             showGraphs,
             statePh,
             targetEntropy,
-            entropyCoefficient
+            entropyCoefficient,
+            maxGradientNorm
         ):
         self.sess = sess
         self.graph = graph
@@ -94,10 +95,10 @@ class PolicyNetwork:
         self.batchSize = batchSize
         self.statePh = statePh
         self.entropyCoefficientVal = entropyCoefficient
+        self.maxGradientNorm = maxGradientNorm
         with self.graph.as_default():
             with tf.variable_scope("EntropyCoefficient"):
                 if (entropyCoefficient == "auto"):
-                    print("AUTO")
                     self.logEntropyCoefficient = tf.get_variable(
                         'logEntropyCoefficient',
                         dtype=tf.float32,
@@ -191,10 +192,23 @@ class PolicyNetwork:
             loss = tf.reduce_mean(
                 batchLoss
             )
-            # loss = tf.reduce_mean(
-            #     tf.stop_gradient(self.entropyCoefficient) * logProb - self.qNetwork.buildNetwork(self.statePh, actionsChosen)
-            # )
             optimizer = tf.train.AdamOptimizer(self.learningRate)
-            policyTrainingOperation = optimizer.minimize(loss, var_list=tf.trainable_variables(scope=self.name))
-            return policyTrainingOperation, entropyCoefficientTrainingOperation
+            uncappedGradients, variables = zip(
+                *optimizer.compute_gradients(
+                    loss,
+                    var_list=tf.trainable_variables(scope=self.name)
+                )
+            )
+            (
+                cappedGradients,
+                regTerm
+            ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
+            trainingOperation = optimizer.apply_gradients(zip(cappedGradients, variables))
+            return (
+                trainingOperation,
+                entropyCoefficientTrainingOperation,
+                regTerm,
+                entropyCoefficientLoss,
+                self.entropyCoefficient
+            )
 

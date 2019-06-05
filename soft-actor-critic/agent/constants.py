@@ -12,6 +12,6 @@ OLD_PRIORITY = 8
 PRIORITY = 9
 POSITION = 10
 
-ACTION_NAMES = ["noop", "right", "main", "left"]
+ACTION_NAMES = ["torque"]
 
 IMAGE_SIZE = 200

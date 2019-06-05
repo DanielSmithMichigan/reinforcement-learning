@@ -10,7 +10,7 @@ agent = Agent(
     valueNetworkLearningRate=4e-3,
     policyNetworkLearningRate=4e-3,
     qNetworkLearningRate=4e-3,
-    entropyCoefficient=1e-3,
+    entropyCoefficient="auto",
     tau=0.005,
     gamma=0.99,
     maxMemoryLength=int(1e6),
@@ -22,11 +22,12 @@ agent = Agent(
     rewardScaling=1.5e-3,
     actionShift=0.0,
     stepsPerUpdate=1,
-    render=False,
+    render=True,
     showGraphs=False,
     testSteps=1024,
     maxMinutes=600,
-    targetEntropy=-1.0
+    targetEntropy=-1.0,
+    maxGradientNorm=5.0
 )
 
 print("Total Reward: "+str(agent.execute()))

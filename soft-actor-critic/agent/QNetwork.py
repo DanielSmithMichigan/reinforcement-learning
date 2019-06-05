@@ -21,7 +21,8 @@ class QNetwork:
             nextStatePh,
             actionsPh,
             rewardsPh,
-            terminalsPh
+            terminalsPh,
+            maxGradientNorm
         ):
         self.sess = sess
         self.graph = graph
@@ -30,6 +31,7 @@ class QNetwork:
         self.actionsPh = actionsPh
         self.rewardsPh = rewardsPh
         self.terminalsPh = terminalsPh
+        self.maxGradientNorm = maxGradientNorm
         self.name = name
         self.numStateVariables = numStateVariables
         self.numActions = numActions
@@ -76,7 +78,17 @@ class QNetwork:
             absDiff = targetQ - predictedQ
             loss = 0.5 * tf.reduce_mean(absDiff ** 2)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
-            return optimizer.minimize(loss, var_list=tf.trainable_variables(scope=self.name))
+            uncappedGradients, variables = zip(
+                *optimizer.compute_gradients(
+                    loss,
+                    var_list=tf.trainable_variables(scope=self.name)
+                )
+            )
+            (
+                cappedGradients,
+                regTerm
+            ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
+            return optimizer.apply_gradients(zip(cappedGradients, variables)), loss, regTerm
     def buildAssessmentOperation(self, actions):
         with self.graph.as_default():
             self.assessmentOperation = self.buildNetwork(self.statePh, actions)

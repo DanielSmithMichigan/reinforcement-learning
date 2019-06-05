@@ -21,7 +21,8 @@ class ValueNetwork:
             batchSize,
             numActions,
             showGraphs,
-            statePh
+            statePh,
+            maxGradientNorm
         ):
         self.sess = sess
         self.graph = graph
@@ -32,6 +33,7 @@ class ValueNetwork:
         self.batchSize = batchSize
         self.numActions = numActions
         self.statePh = statePh
+        self.maxGradientNorm = maxGradientNorm
     def buildNetwork(self, state):
         value = None
         with self.graph.as_default():
@@ -89,5 +91,15 @@ class ValueNetwork:
             predictedValue = tf.reshape(predictedValue, [-1])
             loss = 0.5 * tf.reduce_mean((predictedValue - targetValue) ** 2)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
-            return optimizer.minimize(loss, var_list=tf.trainable_variables(scope=self.name))
+            uncappedGradients, variables = zip(
+                *optimizer.compute_gradients(
+                    loss,
+                    var_list=tf.trainable_variables(scope=self.name)
+                )
+            )
+            (
+                cappedGradients,
+                regTerm
+            ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
+            return optimizer.apply_gradients(zip(cappedGradients, variables)), loss, regTerm
 
