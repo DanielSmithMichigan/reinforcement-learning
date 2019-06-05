@@ -49,11 +49,13 @@ class Agent:
             testSteps,
             maxMinutes,
             targetEntropy,
-            maxGradientNorm
+            maxGradientNorm,
+            varianceRegularizationConstant,
+            meanRegularizationConstant
         ):
         self.graph = tf.Graph()
-        self.numStateVariables = 3
-        self.numActions = 1
+        self.numStateVariables = 24
+        self.numActions = 4
         self.batchSize = batchSize
         self.tau = tau
         with self.graph.as_default():
@@ -64,7 +66,7 @@ class Agent:
             self.rewardsPh = tf.placeholder(tf.float32, [None, ], name="Rewards_Placeholder")
             self.terminalsPh = tf.placeholder(tf.float32, [None, ], name="Terminals_Placeholder")
         self.trainingOperations = []
-        self.env = gym.make('Pendulum-v0')
+        self.env = gym.make('BipedalWalker-v2')
         self.startTime = time.time()
 
         self.learnedValueNetwork = ValueNetwork(
@@ -142,7 +144,9 @@ class Agent:
             statePh=self.statePh,
             targetEntropy=targetEntropy,
             entropyCoefficient=entropyCoefficient,
-            maxGradientNorm=maxGradientNorm
+            maxGradientNorm=maxGradientNorm,
+            varianceRegularizationConstant=varianceRegularizationConstant,
+            meanRegularizationConstant=meanRegularizationConstant
         )
 
         self.buildTrainingOperation()
@@ -193,6 +197,21 @@ class Agent:
             self.buildGraphs()
     def buildGraphs(self):
         plt.ion()
+        # self.buildAssessmentGraphs()
+
+        self.overview = plt.figure()
+        self.overview.suptitle("Overview")
+        self.episodeRewardsGraph = self.overview.add_subplot(4, 1, 1)
+        self.fpsOverTimeGraph = self.overview.add_subplot(4, 1, 2)
+        self.actionsChosenGraph = self.overview.add_subplot(4, 1, 3)
+        self.entropyOverTimeGraph = self.overview.add_subplot(4, 1, 4)
+    
+        self.lossFigure = plt.figure()
+        self.lossGraph = self.lossFigure.add_subplot(4, 1, 1)
+        self.entropyCoefficientLossGraph = self.lossFigure.add_subplot(4, 1, 2)
+        self.regTermGraph = self.lossFigure.add_subplot(4, 1, 3)
+        self.entropyCoefficientGraph = self.lossFigure.add_subplot(4, 1, 4)
+    def buildAssessmentGraphs(self):
         self.qAssessmentFigure = plt.figure()
         self.qAssessmentFigure.suptitle("Q Assessments")
         self.qAssessmentGraph = self.qAssessmentFigure.add_subplot(1, 1, 1)
@@ -210,21 +229,8 @@ class Agent:
         self.policyGraph = self.policyFigure.add_subplot(1, 1, 1)
         divider = make_axes_locatable(self.policyGraph)
         self.policyColorBar = divider.append_axes("right", size="7%", pad="2%")
-
-        self.overview = plt.figure()
-        self.overview.suptitle("Overview")
-        self.episodeRewardsGraph = self.overview.add_subplot(4, 1, 1)
-        self.fpsOverTimeGraph = self.overview.add_subplot(4, 1, 2)
-        self.actionsChosenGraph = self.overview.add_subplot(4, 1, 3)
-        self.entropyOverTimeGraph = self.overview.add_subplot(4, 1, 4)
-    
-        self.lossFigure = plt.figure()
-        self.lossGraph = self.lossFigure.add_subplot(4, 1, 1)
-        self.entropyCoefficientLossGraph = self.lossFigure.add_subplot(4, 1, 2)
-        self.regTermGraph = self.lossFigure.add_subplot(4, 1, 3)
-        self.entropyCoefficientGraph = self.lossFigure.add_subplot(4, 1, 4)
     def updateGraphs(self):
-        self.updateEvalGraphs()
+        # self.updateAssessmentGraphs()
         self.updateOverviewGraphs()
         self.updateLossGraphs()
 
@@ -276,7 +282,7 @@ class Agent:
         self.entropyCoefficientGraph.plot(self.entropyCoefficientOverTime, label="Entropy Coefficient")
 
         self.lossFigure.canvas.draw()
-    def updateEvalGraphs(self):
+    def updateAssessmentGraphs(self):
         states = []
         imageRadius = constants.IMAGE_SIZE / 2
         for xImg in range(constants.IMAGE_SIZE):
@@ -393,7 +399,6 @@ class Agent:
         self.entropyOverTime.append(entropy)
         nextState, reward, done, info = self.env.step(actionsChosen)
         nextState = np.reshape(nextState, [self.numStateVariables,])
-        done = False
         if (self.render):
             self.env.render()
         memoryEntry = np.array(np.zeros(constants.NUM_MEMORY_ENTRIES), dtype=object)
@@ -525,7 +530,9 @@ class Agent:
             self.state = np.reshape(state, [self.numStateVariables,])
             self.totalEpisodeReward = 0
             for stepNum in range(self.trainSteps):
-                self.goToNextState()
+                done = self.goToNextState()
+                if done:
+                    break
             self.episodeRewards.append(self.totalEpisodeReward)
             fps = self.updateFps()
             print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
@@ -535,7 +542,9 @@ class Agent:
         self.state = np.reshape(state, [self.numStateVariables,])
         self.totalEpisodeReward = 0
         for stepNum in range(self.testSteps):
-            self.goToNextState(deterministic=True)
+            done = self.goToNextState(deterministic=True)
+            if done:
+                break
         return self.totalEpisodeReward
             
 

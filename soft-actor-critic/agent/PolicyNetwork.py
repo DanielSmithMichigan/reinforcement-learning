@@ -82,7 +82,9 @@ class PolicyNetwork:
             statePh,
             targetEntropy,
             entropyCoefficient,
-            maxGradientNorm
+            maxGradientNorm,
+            varianceRegularizationConstant,
+            meanRegularizationConstant
         ):
         self.sess = sess
         self.graph = graph
@@ -96,6 +98,8 @@ class PolicyNetwork:
         self.statePh = statePh
         self.entropyCoefficientVal = entropyCoefficient
         self.maxGradientNorm = maxGradientNorm
+        self.varianceRegularizationConstant = varianceRegularizationConstant
+        self.meanRegularizationConstant = meanRegularizationConstant
         with self.graph.as_default():
             with tf.variable_scope("EntropyCoefficient"):
                 if (entropyCoefficient == "auto"):
@@ -188,7 +192,9 @@ class PolicyNetwork:
             qValue = self.qNetwork.buildNetwork(self.statePh, actionsChosen)
             qCost = -tf.reshape(qValue, [-1])
             entropyCost = tf.stop_gradient(self.entropyCoefficient) * logProb
-            batchLoss = entropyCost + qCost
+            varianceRegLoss = self.varianceRegularizationConstant * 0.5 * tf.reduce_mean(uncleanedActionVariance ** 2, axis=1)
+            meanRegLoss = self.meanRegularizationConstant * 0.5 * tf.reduce_mean(actionMean ** 2, axis=1)
+            batchLoss = entropyCost + qCost + varianceRegLoss + meanRegLoss
             loss = tf.reduce_mean(
                 batchLoss
             )
