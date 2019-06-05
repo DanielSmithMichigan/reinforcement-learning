@@ -80,7 +80,8 @@ class PolicyNetwork:
             batchSize,
             showGraphs,
             statePh,
-            targetEntropy
+            targetEntropy,
+            entropyCoefficient
         ):
         self.sess = sess
         self.graph = graph
@@ -92,14 +93,19 @@ class PolicyNetwork:
         self.learningRate = learningRate
         self.batchSize = batchSize
         self.statePh = statePh
+        self.entropyCoefficientVal = entropyCoefficient
         with self.graph.as_default():
             with tf.variable_scope("EntropyCoefficient"):
-                self.logEntropyCoefficient = tf.get_variable(
-                    'logEntropyCoefficient',
-                    dtype=tf.float32,
-                    initializer=np.log(1.0).astype(np.float32)
-                )
-                self.entropyCoefficient = tf.exp(self.logEntropyCoefficient)
+                if (entropyCoefficient == "auto"):
+                    print("AUTO")
+                    self.logEntropyCoefficient = tf.get_variable(
+                        'logEntropyCoefficient',
+                        dtype=tf.float32,
+                        initializer=np.log(1.0).astype(np.float32)
+                    )
+                    self.entropyCoefficient = tf.exp(self.logEntropyCoefficient)
+                else:
+                    self.entropyCoefficient = tf.constant(entropyCoefficient)
     def buildNetwork(self, state):
         actionsChosen = None
         rawAction = None
@@ -167,12 +173,15 @@ class PolicyNetwork:
                 _
             ) = self.buildNetwork(self.statePh)
 
+            entropyCoefficientTrainingOperation = tf.identity(self.entropyCoefficient)
+
             #Entropy Coefficient
-            entropyCoefficientLoss = -tf.reduce_mean(
-                self.logEntropyCoefficient * tf.stop_gradient(logProb + self.targetEntropy)
-            )
-            entropyOptimizer = tf.train.AdamOptimizer(learning_rate=self.learningRate)
-            entropyCoefficientTrainingOperation = entropyOptimizer.minimize(entropyCoefficientLoss, var_list=self.logEntropyCoefficient)
+            if self.entropyCoefficientVal == "auto":
+                entropyCoefficientLoss = -tf.reduce_mean(
+                    self.logEntropyCoefficient * tf.stop_gradient(logProb + self.targetEntropy)
+                )
+                entropyOptimizer = tf.train.AdamOptimizer(learning_rate=self.learningRate)
+                entropyCoefficientTrainingOperation = entropyOptimizer.minimize(entropyCoefficientLoss, var_list=self.logEntropyCoefficient)
 
             #Policy
             qValue = self.qNetwork.buildNetwork(self.statePh, actionsChosen)

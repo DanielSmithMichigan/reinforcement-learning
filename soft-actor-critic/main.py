@@ -10,6 +10,7 @@ agent = Agent(
     valueNetworkLearningRate=4e-3,
     policyNetworkLearningRate=4e-3,
     qNetworkLearningRate=4e-3,
+    entropyCoefficient=1e-3,
     tau=0.005,
     gamma=0.99,
     maxMemoryLength=int(1e6),

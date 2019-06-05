@@ -31,6 +31,7 @@ class Agent:
             valueNetworkLearningRate,
             policyNetworkLearningRate,
             qNetworkLearningRate,
+            entropyCoefficient,
             tau,
             gamma,
             maxMemoryLength,
@@ -134,7 +135,8 @@ class Agent:
             batchSize=batchSize,
             showGraphs=showGraphs,
             statePh=self.statePh,
-            targetEntropy=targetEntropy
+            targetEntropy=targetEntropy,
+            entropyCoefficient=entropyCoefficient
         )
 
         self.buildTrainingOperation()
