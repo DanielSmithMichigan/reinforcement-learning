@@ -65,14 +65,39 @@ class QNetwork:
                     reuse=tf.AUTO_REUSE
                 )
         return qValue
-    def setValueNetwork(self, valueNetwork):
-        self.valueNetwork = valueNetwork
+    def buildSoftCopyOperation(self, otherNetwork, tau):
+        with self.graph.as_default():
+            return [tf.assign(t, (1 - tau) * t + tau * e) for t, e in zip(
+                tf.trainable_variables(
+                    scope=self.name
+                ),
+                tf.trainable_variables(
+                    scope=otherNetwork.name
+                )
+            )]
+    def setTargetNetworks(self, target1, target2):
+        self.target1 = target1
+        self.target2 = target2
     def setPolicyNetwork(self, policyNetwork):
         self.policyNetwork = policyNetwork
     def buildTrainingOperation(self):
         with self.graph.as_default():
-            reshapedValue = tf.reshape(self.valueNetwork.buildNetwork(self.nextStatePh), [-1])
-            targetQ = self.rewardsPh + self.gamma * (1 - self.terminalsPh) * tf.stop_gradient(reshapedValue)
+            (
+                nextActionsChosen,
+                _,
+                _,
+                _,
+                _,
+                _,
+                _,
+                nextLogProb,
+                _
+            ) = self.policyNetwork.buildNetwork(self.nextStatePh)
+            nextQValuesQ1 = self.target1.buildNetwork(self.nextStatePh, nextActionsChosen)
+            nextQValuesQ2 = self.target2.buildNetwork(self.nextStatePh, nextActionsChosen)
+            minQ = tf.reduce_min(tf.concat([nextQValuesQ1, nextQValuesQ2], axis=1), axis=1)
+            minQ = tf.reshape(minQ, [-1])
+            targetQ = self.rewardsPh + self.gamma * (1 - self.terminalsPh) * tf.stop_gradient(minQ)
             predictedQ = self.buildNetwork(self.statePh, self.actionsPh)
             predictedQ = tf.reshape(predictedQ, [-1])
             absDiff = targetQ - predictedQ

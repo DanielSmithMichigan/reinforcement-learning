@@ -36,13 +36,13 @@ try:
         actionShift=0.0,
         stepsPerUpdate=1,
         render=False,
-        showGraphs=False,
+        showGraphs=True,
         testSteps=1024,
         maxMinutes=60,
         targetEntropy=-4.0,
         maxGradientNorm=5.0,
-        meanRegularizationConstant=meanRegularizationConstant,
-        varianceRegularizationConstant=varianceRegularizationConstant
+        meanRegularizationConstant=0.02,
+        varianceRegularizationConstant=0.01
     )
 
     result = agent.execute()
