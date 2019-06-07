@@ -10,7 +10,9 @@ cur = db.cursor()
 
 experimentName = "bipedal-walker-priority-exponent"
 
-priorityExponent = 10 ** np.random.uniform(-5, 0)
+priorityExponent = 10 ** np.random.uniform(-3, 0)
+if (np.random.uniform() < .1):
+    priorityExponent = 0
 
 try:
     agent = Agent(
