@@ -39,8 +39,8 @@ try:
         maxMinutes=60,
         targetEntropy=-4.0,
         maxGradientNorm=5.0,
-        meanRegularizationConstant=0.02,
-        varianceRegularizationConstant=0.01,
+        meanRegularizationConstant=0.0,
+        varianceRegularizationConstant=0.0,
         randomStartSteps=10000
     )
 
