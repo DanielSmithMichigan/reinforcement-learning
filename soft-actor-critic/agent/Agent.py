@@ -387,7 +387,7 @@ class Agent:
         )
         actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
         actionsChosen = actionsChosen * self.actionScaling
-        if self.globalStep < self.randomStartSteps:e
+        if self.globalStep < self.randomStartSteps:
             actionsChosen = self.env.action_space.sample()
         self.actionsChosen.append(actionsChosen)
         self.entropyOverTime.append(entropy)
