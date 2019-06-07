@@ -40,6 +40,7 @@ class Agent:
             stepsPerUpdate,
             render,
             showGraphs,
+            save,
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
@@ -52,8 +53,8 @@ class Agent:
             randomStartSteps
         ):
         self.graph = tf.Graph()
-        self.numStateVariables = 3
-        self.numActions = 1
+        self.numStateVariables = 24
+        self.numActions = 4
         self.batchSize = batchSize
         self.tau = tau
         with self.graph.as_default():
@@ -64,9 +65,10 @@ class Agent:
             self.rewardsPh = tf.placeholder(tf.float32, [None, ], name="Rewards_Placeholder")
             self.terminalsPh = tf.placeholder(tf.float32, [None, ], name="Terminals_Placeholder")
         self.trainingOperations = []
-        self.env = gym.make('Pendulum-v0')
+        self.env = gym.make('BipedalWalker-v2')
         self.startTime = time.time()
         self.randomStartSteps = randomStartSteps
+        self.save = save
 
         self.qNetwork1 = QNetwork(
             sess=self.sess,
@@ -385,13 +387,11 @@ class Agent:
         )
         actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
         actionsChosen = actionsChosen * self.actionScaling
-        if self.globalStep < self.randomStartSteps:
-            print("RANDOM "+str(self.globalStep))
+        if self.globalStep < self.randomStartSteps:e
             actionsChosen = self.env.action_space.sample()
         self.actionsChosen.append(actionsChosen)
         self.entropyOverTime.append(entropy)
         nextState, reward, done, info = self.env.step(actionsChosen)
-        done = False
         nextState = np.reshape(nextState, [self.numStateVariables,])
         if (self.render):
             self.env.render()
@@ -502,6 +502,8 @@ class Agent:
     def execute(self):
         with self.graph.as_default():
             self.sess.run(tf.global_variables_initializer())
+            if self.save:
+                self.saver = tf.train.Saver()
         self.sess.run([self.hardCopy1, self.hardCopy2])
         self.globalStep = 0
         for episodeNum in range(self.maxEpisodes):
@@ -519,6 +521,9 @@ class Agent:
             print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
             if self.showGraphs:
                 self.updateGraphs()
+            if self.save:
+                with self.graph.as_default():
+                    self.saver.save(self.sess, "./models/"+self.name)
         state = self.env.reset()
         self.state = np.reshape(state, [self.numStateVariables,])
         self.totalEpisodeReward = 0
