@@ -53,13 +53,15 @@ class Agent:
             varianceRegularizationConstant,
             meanRegularizationConstant,
             randomStartSteps,
-            gradientSteps
+            gradientSteps,
+            extraNoise
         ):
         self.graph = tf.Graph()
         self.numStateVariables = 24
         self.numActions = 4
         self.batchSize = batchSize
         self.tau = tau
+        self.extraNoise = extraNoise
         with self.graph.as_default():
             self.sess = tf.Session()
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name="State_Placeholder")
@@ -392,6 +394,8 @@ class Agent:
         )
         actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
         actionsChosen = actionsChosen * self.actionScaling
+        extraNoise = np.random.normal(loc=0.0, scale=self.extraNoise, size=(self.numActions,))
+        actionsChosen += extraNoise
         if self.globalStep < self.randomStartSteps:
             actionsChosen = self.env.action_space.sample()
         self.actionsChosen.append(actionsChosen)

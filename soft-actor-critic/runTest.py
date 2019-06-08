@@ -9,6 +9,7 @@ db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.
 cur = db.cursor()
 
 # experimentName = "bipedal-walker-priority-exponent"
+extraNoise = np.random.uniform(0, 0.2)
 
 try:
     agent = Agent(
@@ -41,7 +42,8 @@ try:
         meanRegularizationConstant=0.0,
         varianceRegularizationConstant=0.0,
         randomStartSteps=10000,
-        gradientSteps=16
+        gradientSteps=16,
+        extraNoise=extraNoise
     )
 
     result = agent.execute()

@@ -31,7 +31,8 @@ agent = Agent(
     meanRegularizationConstant=0.0,
     varianceRegularizationConstant=0.0,
     randomStartSteps=10000,
-    gradientSteps=16
+    gradientSteps=16,
+    extraNoise = 0.0
 )
 
 print("Total Reward: "+str(agent.execute()))
