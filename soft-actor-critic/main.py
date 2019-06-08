@@ -2,6 +2,7 @@ import numpy as np
 from agent.Agent import Agent
 
 agent = Agent(
+    # name="agent_7852726",
     name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
     actionScaling=1.0,
     policyNetworkSize=[256, 256],
@@ -11,7 +12,7 @@ agent = Agent(
     entropyCoefficient="auto",
     tau=0.005,
     gamma=0.99,
-    maxMemoryLength=8192,
+    maxMemoryLength=int(5e6),
     priorityExponent=0.0,
     batchSize=256,
     maxEpisodes=1024,
@@ -19,9 +20,9 @@ agent = Agent(
     minStepsBeforeTraining=4096,
     rewardScaling=0.01,
     actionShift=0.0,
-    stepsPerUpdate=4096,
+    stepsPerUpdate=1024,
     render=False,
-    showGraphs=False,
+    showGraphs=True,
     syncToS3=True,
     testSteps=1024,
     maxMinutes=60,
@@ -30,7 +31,7 @@ agent = Agent(
     meanRegularizationConstant=0.0,
     varianceRegularizationConstant=0.0,
     randomStartSteps=10000,
-    gradientSteps=16,
+    gradientSteps=256,
     extraNoise = 0.0
 )
 

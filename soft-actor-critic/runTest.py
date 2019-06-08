@@ -22,7 +22,7 @@ try:
         entropyCoefficient="auto",
         tau=0.005,
         gamma=0.99,
-        maxMemoryLength=8192,
+        maxMemoryLength=int(5e6),
         priorityExponent=0.0,
         batchSize=256,
         maxEpisodes=1024,
@@ -30,7 +30,7 @@ try:
         minStepsBeforeTraining=4096,
         rewardScaling=0.01,
         actionShift=0.0,
-        stepsPerUpdate=4096,
+        stepsPerUpdate=1024,
         render=False,
         showGraphs=False,
         syncToS3=True,
@@ -41,7 +41,7 @@ try:
         meanRegularizationConstant=0.0,
         varianceRegularizationConstant=0.0,
         randomStartSteps=10000,
-        gradientSteps=16,
+        gradientSteps=256,
         extraNoise=extraNoise
     )
 

@@ -411,7 +411,7 @@ class Agent:
         memoryEntry[constants.IS_TERMINAL] = done
         self.state = nextState
         self.memoryBuffer.add(memoryEntry)
-        self.globalStep = self.globalStep + 1
+        self.globalStep += 1
         self.totalEpisodeReward = self.totalEpisodeReward + reward
         if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining:
             self.getLatestModel()
