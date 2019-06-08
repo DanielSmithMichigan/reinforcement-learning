@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import os
 import gym
 import time
 import math
@@ -40,7 +41,8 @@ class Agent:
             stepsPerUpdate,
             render,
             showGraphs,
-            save,
+            syncToS3,
+            clearBufferAfterTraining,
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
@@ -50,7 +52,8 @@ class Agent:
             maxGradientNorm,
             varianceRegularizationConstant,
             meanRegularizationConstant,
-            randomStartSteps
+            randomStartSteps,
+            gradientSteps
         ):
         self.graph = tf.Graph()
         self.numStateVariables = 24
@@ -68,7 +71,9 @@ class Agent:
         self.env = gym.make('BipedalWalker-v2')
         self.startTime = time.time()
         self.randomStartSteps = randomStartSteps
-        self.save = save
+        self.syncToS3 = syncToS3
+        self.gradientSteps = gradientSteps
+        self.clearBufferAfterTraining = clearBufferAfterTraining
 
         self.qNetwork1 = QNetwork(
             sess=self.sess,
@@ -387,7 +392,7 @@ class Agent:
         )
         actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
         actionsChosen = actionsChosen * self.actionScaling
-        if self.globalStep < self.randomStartSteps:e
+        if self.globalStep < self.randomStartSteps:
             actionsChosen = self.env.action_space.sample()
         self.actionsChosen.append(actionsChosen)
         self.entropyOverTime.append(entropy)
@@ -408,7 +413,10 @@ class Agent:
         self.globalStep = self.globalStep + 1
         self.totalEpisodeReward = self.totalEpisodeReward + reward
         if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining:
-            self.train()
+            self.getLatestModel()
+            for i in range(self.gradientSteps):
+                self.train()
+            self.updateModel()
         return done
     def buildTrainingOperation(self):
         self.qNetwork1.setTargetNetworks(self.qNetwork1Target, self.qNetwork2Target)
@@ -490,6 +498,8 @@ class Agent:
         self.policyRegTerm.append(policyRegTerm)
         self.entropyCoefficientLoss.append(entropyCoefficientLoss)
         self.entropyCoefficientOverTime.append(entropyCoefficient)
+        if self.clearBufferAfterTraining:
+            self.memoryBuffer.clear()
     def updateFps(self):
         newTime = time.time()
         timeSpent = newTime - self.lastTime
@@ -499,10 +509,21 @@ class Agent:
         self.lastTime = newTime
         self.fpsOverTime.append(fps)
         return fps
+    def getLatestModel(self):
+        if self.syncToS3:
+            os.system("aws s3 sync s3://tensorflow-models-dan-smith/"+self.name+"/ models/")
+            if tf.train.checkpoint_exists("./models/"+self.name):
+                with self.graph.as_default():
+                    self.saver.restore(self.sess, "./models/"+self.name)
+    def updateModel(self):
+        if self.syncToS3:
+            with self.graph.as_default():
+                self.saver.save(self.sess, "./models/"+self.name)
+            os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/")
     def execute(self):
         with self.graph.as_default():
             self.sess.run(tf.global_variables_initializer())
-            if self.save:
+            if self.syncToS3:
                 self.saver = tf.train.Saver()
         self.sess.run([self.hardCopy1, self.hardCopy2])
         self.globalStep = 0
@@ -521,9 +542,7 @@ class Agent:
             print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
             if self.showGraphs:
                 self.updateGraphs()
-            if self.save:
-                with self.graph.as_default():
-                    self.saver.save(self.sess, "./models/"+self.name)
+            self.getLatestModel()
         state = self.env.reset()
         self.state = np.reshape(state, [self.numStateVariables,])
         self.totalEpisodeReward = 0

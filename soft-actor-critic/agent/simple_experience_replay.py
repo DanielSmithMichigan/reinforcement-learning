@@ -10,5 +10,7 @@ class SimpleExperienceReplay:
         self.batchSize = batchSize
     def add(self, memory):
         self.buffer.append(memory)
+    def clear(self):
+        self.buffer.clear()
     def getMemoryBatch(self):
         return random.sample(self.buffer, min(self.batchSize, len(self.buffer)))
