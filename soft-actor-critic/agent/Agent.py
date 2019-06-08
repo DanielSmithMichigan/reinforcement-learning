@@ -42,7 +42,6 @@ class Agent:
             render,
             showGraphs,
             syncToS3,
-            clearBufferAfterTraining,
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
@@ -75,7 +74,6 @@ class Agent:
         self.randomStartSteps = randomStartSteps
         self.syncToS3 = syncToS3
         self.gradientSteps = gradientSteps
-        self.clearBufferAfterTraining = clearBufferAfterTraining
 
         self.qNetwork1 = QNetwork(
             sess=self.sess,
@@ -407,7 +405,6 @@ class Agent:
         memoryEntry = np.array(np.zeros(constants.NUM_MEMORY_ENTRIES), dtype=object)
         memoryEntry[constants.STATE] = self.state
         memoryEntry[constants.ACTION] = actionsChosen
-        # memoryEntry[constants.REWARD] = np.reshape(-abs(actionsChosen - .1), [])
         memoryEntry[constants.REWARD] = reward * self.rewardScaling
         memoryEntry[constants.NEXT_STATE] = nextState
         memoryEntry[constants.GAMMA] = self.gamma if not done else 0
@@ -502,8 +499,6 @@ class Agent:
         self.policyRegTerm.append(policyRegTerm)
         self.entropyCoefficientLoss.append(entropyCoefficientLoss)
         self.entropyCoefficientOverTime.append(entropyCoefficient)
-        if self.clearBufferAfterTraining:
-            self.memoryBuffer.clear()
     def updateFps(self):
         newTime = time.time()
         timeSpent = newTime - self.lastTime
