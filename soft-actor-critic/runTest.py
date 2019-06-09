@@ -31,7 +31,7 @@ try:
         maxEpisodes=1024,
         trainSteps=1024,
         minStepsBeforeTraining=4096,
-        rewardScaling=0.0,
+        rewardScaling=rewardScaling,
         actionShift=0.0,
         stepsPerUpdate=1,
         render=False,
