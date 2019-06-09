@@ -8,12 +8,13 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-# experimentName = "bipedal-walker-priority-exponent"
-extraNoise = np.random.uniform(0, 0.2)
+experimentName = "bipedal-walker-reward-scaling"
+
+rewardScaling = 10.0 ** np.random.uniform(-3, 1)
 
 try:
     agent = Agent(
-        name=os.environ['AGENT_NAME'],
+        name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
         actionScaling=1.0,
         policyNetworkSize=[256, 256],
         qNetworkSize=[256, 256],
@@ -28,12 +29,12 @@ try:
         maxEpisodes=1024,
         trainSteps=1024,
         minStepsBeforeTraining=4096,
-        rewardScaling=0.01,
+        rewardScaling=rewardScaling,
         actionShift=0.0,
-        stepsPerUpdate=1024,
+        stepsPerUpdate=1,
         render=False,
         showGraphs=False,
-        syncToS3=True,
+        saveModel=False,
         testSteps=1024,
         maxMinutes=60,
         targetEntropy=-4.0,
@@ -41,29 +42,30 @@ try:
         meanRegularizationConstant=0.0,
         varianceRegularizationConstant=0.0,
         randomStartSteps=10000,
-        gradientSteps=256,
-        extraNoise=extraNoise
+        gradientSteps=1,
+        initialExtraNoise=0.0,
+        extraNoiseDecay=.99998
     )
 
     result = agent.execute()
 except:
     print("Error evaluating parameters")
     result = -20000
-# cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}')".format(
-#         experimentName,
-#         priorityExponent,
-#         0,
-#         0,
-#         0,
-#         0,
-#         0,
-#         0,
-#         0,
-#         0,
-#         0,
-#         result
-#     )
-# )
-# db.commit()
+cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}')".format(
+        experimentName,
+        rewardScaling,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        result
+    )
+)
+db.commit()
 cur.close()
 db.close()

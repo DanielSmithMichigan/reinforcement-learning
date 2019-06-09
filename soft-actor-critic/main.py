@@ -2,7 +2,6 @@ import numpy as np
 from agent.Agent import Agent
 
 agent = Agent(
-    # name="agent_7852726",
     name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
     actionScaling=1.0,
     policyNetworkSize=[256, 256],
@@ -20,10 +19,10 @@ agent = Agent(
     minStepsBeforeTraining=4096,
     rewardScaling=0.01,
     actionShift=0.0,
-    stepsPerUpdate=1024,
+    stepsPerUpdate=1,
     render=False,
     showGraphs=True,
-    syncToS3=True,
+    saveModel=False,
     testSteps=1024,
     maxMinutes=60,
     targetEntropy=-4.0,
@@ -31,8 +30,9 @@ agent = Agent(
     meanRegularizationConstant=0.0,
     varianceRegularizationConstant=0.0,
     randomStartSteps=10000,
-    gradientSteps=256,
-    extraNoise = 0.0
+    gradientSteps=1,
+    initialExtraNoise=0.0,
+    extraNoiseDecay=.99998
 )
 
 print("Total Reward: "+str(agent.execute()))

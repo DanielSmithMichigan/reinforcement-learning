@@ -41,7 +41,7 @@ class Agent:
             stepsPerUpdate,
             render,
             showGraphs,
-            syncToS3,
+            saveModel,
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
@@ -53,14 +53,16 @@ class Agent:
             meanRegularizationConstant,
             randomStartSteps,
             gradientSteps,
-            extraNoise
+            initialExtraNoise,
+            extraNoiseDecay
         ):
         self.graph = tf.Graph()
         self.numStateVariables = 24
         self.numActions = 4
         self.batchSize = batchSize
         self.tau = tau
-        self.extraNoise = extraNoise
+        self.extraNoiseMax = initialExtraNoise
+        self.extraNoiseDecay = extraNoiseDecay
         with self.graph.as_default():
             self.sess = tf.Session()
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name="State_Placeholder")
@@ -72,7 +74,7 @@ class Agent:
         self.env = gym.make('BipedalWalker-v2')
         self.startTime = time.time()
         self.randomStartSteps = randomStartSteps
-        self.syncToS3 = syncToS3
+        self.saveModel = saveModel
         self.gradientSteps = gradientSteps
 
         self.qNetwork1 = QNetwork(
@@ -206,6 +208,7 @@ class Agent:
         self.policyRegTerm = deque([], 400)
         self.entropyCoefficientOverTime = deque([], 400)
         self.entropyOverTime = deque([], 400)
+        self.extraNoiseOverTime = deque([], 80000)
         self.lastGlobalStep = 0
         self.lastTime = time.time()
         if showGraphs:
@@ -216,10 +219,11 @@ class Agent:
 
         self.overview = plt.figure()
         self.overview.suptitle("Overview")
-        self.episodeRewardsGraph = self.overview.add_subplot(4, 1, 1)
-        self.fpsOverTimeGraph = self.overview.add_subplot(4, 1, 2)
-        self.actionsChosenGraph = self.overview.add_subplot(4, 1, 3)
-        self.entropyOverTimeGraph = self.overview.add_subplot(4, 1, 4)
+        self.episodeRewardsGraph = self.overview.add_subplot(5, 1, 1)
+        self.fpsOverTimeGraph = self.overview.add_subplot(5, 1, 2)
+        self.actionsChosenGraph = self.overview.add_subplot(5, 1, 3)
+        self.entropyOverTimeGraph = self.overview.add_subplot(5, 1, 4)
+        self.extraNoiseOverTimeGraph = self.overview.add_subplot(5, 1, 5)
     
         self.lossFigure = plt.figure()
         self.lossGraph = self.lossFigure.add_subplot(4, 1, 1)
@@ -263,6 +267,10 @@ class Agent:
         self.entropyOverTimeGraph.cla()
         self.entropyOverTimeGraph.set_title("Entropy")
         self.entropyOverTimeGraph.plot(self.entropyOverTime, label="Entropy")
+
+        self.extraNoiseOverTimeGraph.cla()
+        self.extraNoiseOverTimeGraph.set_title("Extra Noise")
+        self.extraNoiseOverTimeGraph.plot(self.extraNoiseOverTime, label="Extra Noise")
 
         self.overview.canvas.draw()
     def updateLossGraphs(self):
@@ -392,7 +400,10 @@ class Agent:
         )
         actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
         actionsChosen = actionsChosen * self.actionScaling
-        extraNoise = np.random.normal(loc=0.0, scale=self.extraNoise, size=(self.numActions,))
+        extraNoiseScale = np.random.uniform() * self.extraNoiseMax
+        self.extraNoiseOverTime.append(extraNoiseScale)
+        extraNoise = np.random.normal(loc=0.0, scale=extraNoiseScale, size=(self.numActions,))
+        self.extraNoiseMax *= self.extraNoiseDecay
         actionsChosen += extraNoise
         if self.globalStep < self.randomStartSteps:
             actionsChosen = self.env.action_space.sample()
@@ -509,20 +520,20 @@ class Agent:
         self.fpsOverTime.append(fps)
         return fps
     def getLatestModel(self):
-        if self.syncToS3:
-            os.system("aws s3 sync s3://tensorflow-models-dan-smith/"+self.name+"/ models/")
+        if self.saveModel:
+            # os.system("aws s3 sync s3://tensorflow-models-dan-smith/"+self.name+"/ models/")
             if tf.train.checkpoint_exists("./models/"+self.name):
                 with self.graph.as_default():
                     self.saver.restore(self.sess, "./models/"+self.name)
     def updateModel(self):
-        if self.syncToS3:
+        if self.saveModel:
             with self.graph.as_default():
                 self.saver.save(self.sess, "./models/"+self.name)
-            os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/")
+            # os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/")
     def execute(self):
         with self.graph.as_default():
             self.sess.run(tf.global_variables_initializer())
-            if self.syncToS3:
+            if self.saveModel:
                 self.saver = tf.train.Saver()
         self.sess.run([self.hardCopy1, self.hardCopy2])
         self.globalStep = 0
