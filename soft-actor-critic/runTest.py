@@ -29,7 +29,7 @@ try:
         maxMemoryLength=int(5e6),
         priorityExponent=0.0,
         batchSize=256,
-        maxEpisodes=1024,
+        maxEpisodes=4096,
         trainSteps=1024,
         minStepsBeforeTraining=4096,
         rewardScaling=rewardScaling,
