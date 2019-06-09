@@ -13,7 +13,7 @@ experimentName = "bipedal-walker-minutes"
 rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
-maxMinutes = int(np.random.randint(1, 8) * 30)
+maxMinutes = int(np.random.randint(1, 4) * 60)
 
 try:
     agent = Agent(
