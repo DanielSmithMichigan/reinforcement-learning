@@ -8,9 +8,12 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 
-experimentName = "bipedal-walker-reward-scaling"
+experimentName = "bipedal-walker-to-s3"
 
-rewardScaling = 10.0 ** np.random.uniform(-3, 1)
+rewardScaling = 10.0 ** -0.75
+initialExtraNoise = np.random.uniform(0, 0.5)
+extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
+maxMinutes = 180
 
 try:
     agent = Agent(
@@ -26,7 +29,7 @@ try:
         maxMemoryLength=int(5e6),
         priorityExponent=0.0,
         batchSize=256,
-        maxEpisodes=1024,
+        maxEpisodes=4096,
         trainSteps=1024,
         minStepsBeforeTraining=4096,
         rewardScaling=rewardScaling,
@@ -36,15 +39,15 @@ try:
         showGraphs=False,
         saveModel=True,
         testSteps=1024,
-        maxMinutes=60,
+        maxMinutes=maxMinutes,
         targetEntropy=-4.0,
         maxGradientNorm=5.0,
         meanRegularizationConstant=0.0,
         varianceRegularizationConstant=0.0,
         randomStartSteps=10000,
         gradientSteps=1,
-        initialExtraNoise=0.0,
-        extraNoiseDecay=.99998
+        initialExtraNoise=0,
+        extraNoiseDecay=0
     )
 
     results = agent.execute()
@@ -54,7 +57,7 @@ except:
 for resultNum in range(len(results)):
     cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}')".format(
             experimentName,
-            rewardScaling,
+            0,
             0,
             0,
             0,
