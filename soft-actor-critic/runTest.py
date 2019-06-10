@@ -15,6 +15,9 @@ initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
 maxMinutes = 180
 
+
+results = [-20000]
+
 try:
     agent = Agent(
         name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
@@ -53,7 +56,7 @@ try:
     results = agent.execute()
 except:
     print("Error evaluating parameters")
-    result = [-20000]
+    results = [-20000]
 for resultNum in range(len(results)):
     cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}')".format(
             experimentName,
