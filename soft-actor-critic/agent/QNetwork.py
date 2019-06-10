@@ -103,6 +103,7 @@ class QNetwork:
             predictedQ = tf.reshape(predictedQ, [-1])
             absDiff = targetQ - predictedQ
             loss = 0.5 * tf.reduce_mean(absDiff ** 2)
+            tf.summary.scalar(self.name+" Loss", loss)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
             uncappedGradients, variables = zip(
                 *optimizer.compute_gradients(

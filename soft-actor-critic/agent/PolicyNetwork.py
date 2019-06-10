@@ -195,9 +195,12 @@ class PolicyNetwork:
             varianceRegLoss = self.varianceRegularizationConstant * 0.5 * tf.reduce_mean(uncleanedActionVariance ** 2, axis=1)
             meanRegLoss = self.meanRegularizationConstant * 0.5 * tf.reduce_mean(actionMean ** 2, axis=1)
             batchLoss = entropyCost + qCost + varianceRegLoss + meanRegLoss
+            tf.summary.scalar(self.name+" qCost", tf.reduce_mean(qCost, axis=0))
+            tf.summary.scalar(self.name+" Entropy Cost", tf.reduce_mean(entropyCost, axis=0))
             loss = tf.reduce_mean(
                 batchLoss
             )
+            tf.summary.scalar(self.name+" Loss", loss)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
             uncappedGradients, variables = zip(
                 *optimizer.compute_gradients(
@@ -209,6 +212,7 @@ class PolicyNetwork:
                 cappedGradients,
                 regTerm
             ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
+            tf.summary.scalar(self.name+" Reg Term", regTerm)
             trainingOperation = optimizer.apply_gradients(zip(cappedGradients, variables))
             return (
                 trainingOperation,

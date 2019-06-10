@@ -22,7 +22,7 @@ agent = Agent(
     stepsPerUpdate=1,
     render=False,
     showGraphs=True,
-    saveModel=False,
+    saveModel=True,
     testSteps=1024,
     maxMinutes=60,
     targetEntropy=-4.0,
@@ -32,7 +32,8 @@ agent = Agent(
     randomStartSteps=10000,
     gradientSteps=1,
     initialExtraNoise=0.0,
-    extraNoiseDecay=.99998
+    extraNoiseDecay=.99998,
+    evaluationEvery=250
 )
 
 print("Total Reward: "+str(agent.execute()))

@@ -34,7 +34,7 @@ try:
         stepsPerUpdate=1,
         render=False,
         showGraphs=False,
-        saveModel=False,
+        saveModel=True,
         testSteps=1024,
         maxMinutes=60,
         targetEntropy=-4.0,
@@ -47,25 +47,27 @@ try:
         extraNoiseDecay=.99998
     )
 
-    result = agent.execute()
+    results = agent.execute()
 except:
     print("Error evaluating parameters")
-    result = -20000
-cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}')".format(
-        experimentName,
-        rewardScaling,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        result
+    result = [-20000]
+for resultNum in range(len(results)):
+    cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}')".format(
+            experimentName,
+            rewardScaling,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            results[resultNum],
+            "checkpoint_"+str(resultNum)
+        )
     )
-)
-db.commit()
+    db.commit()
 cur.close()
 db.close()

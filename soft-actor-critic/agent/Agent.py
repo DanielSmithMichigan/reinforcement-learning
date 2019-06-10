@@ -54,7 +54,8 @@ class Agent:
             randomStartSteps,
             gradientSteps,
             initialExtraNoise,
-            extraNoiseDecay
+            extraNoiseDecay,
+            evaluationEvery
         ):
         self.graph = tf.Graph()
         self.numStateVariables = 24
@@ -63,6 +64,7 @@ class Agent:
         self.tau = tau
         self.extraNoiseMax = initialExtraNoise
         self.extraNoiseDecay = extraNoiseDecay
+        self.evaluationEvery = evaluationEvery
         with self.graph.as_default():
             self.sess = tf.Session()
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name="State_Placeholder")
@@ -135,7 +137,7 @@ class Agent:
         self.qNetwork2Target = QNetwork(
             sess=self.sess,
             graph=self.graph,
-            name="QNetwork_2_Target"+name,
+            name="QNetwork_2_Target_"+name,
             numStateVariables=self.numStateVariables,
             numActions=self.numActions,
             networkSize=qNetworkSize,
@@ -213,6 +215,7 @@ class Agent:
         self.lastTime = time.time()
         if showGraphs:
             self.buildGraphs()
+        self.logger = tf.summary.FileWriter('./log', graph_def=self.sess.graph_def)
     def buildGraphs(self):
         plt.ion()
         # self.buildAssessmentGraphs()
@@ -385,7 +388,7 @@ class Agent:
                 actionsChosen,
                 qAssessment
             ]
-    def goToNextState(self,deterministic=False):
+    def goToNextState(self,deterministic=False,endEarly=False):
         (
             rawAction,
             actionsChosen,
@@ -410,6 +413,8 @@ class Agent:
         self.actionsChosen.append(actionsChosen)
         self.entropyOverTime.append(entropy)
         nextState, reward, done, info = self.env.step(actionsChosen)
+        if endEarly:
+            done = True
         nextState = np.reshape(nextState, [self.numStateVariables,])
         if (self.render):
             self.env.render()
@@ -425,10 +430,8 @@ class Agent:
         self.globalStep += 1
         self.totalEpisodeReward = self.totalEpisodeReward + reward
         if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining:
-            self.getLatestModel()
             for i in range(self.gradientSteps):
                 self.train()
-            self.updateModel()
         return done
     def buildTrainingOperation(self):
         self.qNetwork1.setTargetNetworks(self.qNetwork1Target, self.qNetwork2Target)
@@ -459,24 +462,26 @@ class Agent:
         softCopy1 = self.qNetwork1Target.buildSoftCopyOperation(self.qNetwork1, self.tau)
         softCopy2 = self.qNetwork2Target.buildSoftCopyOperation(self.qNetwork2, self.tau)
 
-        self.trainingOperations = [
-            qNetwork1Training,
-            qNetwork2Training,
-            policyTrainingOperation,
-            entropyCoefficientTrainingOperation,
-            softCopy1,
-            softCopy2,
-            q1Loss,
-            q1RegTerm,
-            q2Loss,
-            q2RegTerm,
-            policyRegTerm,
-            entropyCoefficientLoss,
-            entropyCoefficient
-        ]
-
         self.hardCopy1 = self.qNetwork1Target.buildSoftCopyOperation(self.qNetwork1, 1.0)
         self.hardCopy2 = self.qNetwork2Target.buildSoftCopyOperation(self.qNetwork2, 1.0)
+
+        with self.graph.as_default():
+            self.trainingOperations = [
+                qNetwork1Training,
+                qNetwork2Training,
+                policyTrainingOperation,
+                entropyCoefficientTrainingOperation,
+                softCopy1,
+                softCopy2,
+                q1Loss,
+                q1RegTerm,
+                q2Loss,
+                q2RegTerm,
+                policyRegTerm,
+                entropyCoefficientLoss,
+                entropyCoefficient,
+                tf.summary.merge_all()
+            ]
     def train(self):
         trainingMemories = self.memoryBuffer.getMemoryBatch()
         (
@@ -492,7 +497,8 @@ class Agent:
             q2RegTerm,
             policyRegTerm,
             entropyCoefficientLoss,
-            entropyCoefficient
+            entropyCoefficient,
+            summary
         ) = self.sess.run(
             self.trainingOperations,
             feed_dict={
@@ -510,6 +516,7 @@ class Agent:
         self.policyRegTerm.append(policyRegTerm)
         self.entropyCoefficientLoss.append(entropyCoefficientLoss)
         self.entropyCoefficientOverTime.append(entropyCoefficient)
+        self.logger.add_summary(summary, self.globalStep)
     def updateFps(self):
         newTime = time.time()
         timeSpent = newTime - self.lastTime
@@ -519,17 +526,31 @@ class Agent:
         self.lastTime = newTime
         self.fpsOverTime.append(fps)
         return fps
-    def getLatestModel(self):
-        if self.saveModel:
-            # os.system("aws s3 sync s3://tensorflow-models-dan-smith/"+self.name+"/ models/")
-            if tf.train.checkpoint_exists("./models/"+self.name):
-                with self.graph.as_default():
-                    self.saver.restore(self.sess, "./models/"+self.name)
-    def updateModel(self):
-        if self.saveModel:
-            with self.graph.as_default():
-                self.saver.save(self.sess, "./models/"+self.name)
-            # os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/")
+    def syncModelToS3(self, checkpointNum):
+        with self.graph.as_default():
+            self.saver.save(self.sess, "./models/"+self.name)
+        os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/checkpoint_"+str(self.checkpointNum)+"/")
+        self.checkpointNum += 1
+    def episode(self, steps, evaluation):
+        state = self.env.reset()
+        self.state = np.reshape(state, [self.numStateVariables,])
+        self.totalEpisodeReward = 0
+        done = False
+        for stepNum in range(steps):
+            done = self.goToNextState(deterministic=evaluation)
+            if done:
+                break
+        if not done:
+            self.goToNextState(deterministic=evaluation, endEarly=True)
+        if evaluation:
+            self.evaluations.append(self.totalEpisodeReward)
+        self.episodeRewards.append(self.totalEpisodeReward)
+        fps = self.updateFps()
+        print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
+        if self.showGraphs:
+            self.updateGraphs()
+        if evaluation and self.saveModel:
+            self.syncModelToS3(self.checkpointNum)
     def execute(self):
         with self.graph.as_default():
             self.sess.run(tf.global_variables_initializer())
@@ -537,29 +558,14 @@ class Agent:
                 self.saver = tf.train.Saver()
         self.sess.run([self.hardCopy1, self.hardCopy2])
         self.globalStep = 0
+        self.checkpointNum = 0
+        self.evaluations = []
         for episodeNum in range(self.maxEpisodes):
             if self.outOfTime():
                 break
-            state = self.env.reset()
-            self.state = np.reshape(state, [self.numStateVariables,])
-            self.totalEpisodeReward = 0
-            for stepNum in range(self.trainSteps):
-                done = self.goToNextState()
-                if done:
-                    break
-            self.episodeRewards.append(self.totalEpisodeReward)
-            fps = self.updateFps()
-            print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
-            if self.showGraphs:
-                self.updateGraphs()
-            self.getLatestModel()
-        state = self.env.reset()
-        self.state = np.reshape(state, [self.numStateVariables,])
-        self.totalEpisodeReward = 0
-        for stepNum in range(self.testSteps):
-            done = self.goToNextState(deterministic=True)
-            if done:
-                break
+            self.episode(steps=self.trainSteps, evaluation=False)
+            if episodeNum % self.evaluationEvery == 0:
+                self.episode(steps=self.testSteps, evaluation=True)
         return self.totalEpisodeReward
             
 
