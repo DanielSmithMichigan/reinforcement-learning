@@ -566,7 +566,7 @@ class Agent:
             self.episode(steps=self.trainSteps, evaluation=False)
             if episodeNum % self.evaluationEvery == 0:
                 self.episode(steps=self.testSteps, evaluation=True)
-        return self.totalEpisodeReward
+        return self.evaluations
             
 
 
