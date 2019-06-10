@@ -50,7 +50,8 @@ try:
         randomStartSteps=10000,
         gradientSteps=1,
         initialExtraNoise=0,
-        extraNoiseDecay=0
+        extraNoiseDecay=0,
+        evaluationEvery=250
     )
 
     results = agent.execute()
