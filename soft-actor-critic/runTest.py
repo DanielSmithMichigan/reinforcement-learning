@@ -7,6 +7,12 @@ import tensorflow as tf
 import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
+results = [-20000]
+agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
+
+
+
+
 
 experimentName = "bipedal-walker-to-s3"
 
@@ -16,11 +22,9 @@ extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
 maxMinutes = 180
 
 
-results = [-20000]
-
 try:
     agent = Agent(
-        name="agent_"+str(np.random.randint(low=1000000,high=9999999)),
+        name=agentName,
         actionScaling=1.0,
         policyNetworkSize=[256, 256],
         qNetworkSize=[256, 256],
@@ -59,7 +63,7 @@ except:
     print("Error evaluating parameters")
     results = [-20000]
 for resultNum in range(len(results)):
-    cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}')".format(
+    cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}')".format(
             experimentName,
             0,
             0,
@@ -72,7 +76,8 @@ for resultNum in range(len(results)):
             0,
             0,
             results[resultNum],
-            "checkpoint_"+str(resultNum)
+            "checkpoint_"+str(resultNum),
+            agentName
         )
     )
     db.commit()
