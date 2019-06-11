@@ -437,7 +437,7 @@ class Agent:
         self.totalEpisodeReward = self.totalEpisodeReward + reward
         if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining and self.train:
             for i in range(self.gradientSteps):
-                self.train()
+                self.trainNetworks()
         return done
     def buildTrainingOperation(self):
         self.qNetwork1.setTargetNetworks(self.qNetwork1Target, self.qNetwork2Target)
@@ -488,7 +488,7 @@ class Agent:
                 entropyCoefficient,
                 tf.summary.merge_all()
             ]
-    def train(self):
+    def trainNetworks(self):
         trainingMemories = self.memoryBuffer.getMemoryBatch()
         (
             qNetwork1Training,
