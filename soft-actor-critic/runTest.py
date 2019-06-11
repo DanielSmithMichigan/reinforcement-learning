@@ -19,7 +19,7 @@ experimentName = "bipedal-walker-to-s3"
 rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
-maxMinutes = 180
+maxMinutes = 240
 
 
 try:
