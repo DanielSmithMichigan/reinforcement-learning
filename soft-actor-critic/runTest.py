@@ -45,6 +45,8 @@ try:
         render=False,
         showGraphs=False,
         saveModel=True,
+        restoreModel=False,
+        train=True,
         testSteps=1024,
         maxMinutes=maxMinutes,
         targetEntropy=-4.0,
