@@ -55,7 +55,8 @@ try:
         gradientSteps=1,
         initialExtraNoise=0,
         extraNoiseDecay=0,
-        evaluationEvery=250
+        evaluationEvery=250,
+        numFinalEvaluations=10
     )
 
     results = agent.execute()

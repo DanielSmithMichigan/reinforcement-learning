@@ -55,7 +55,8 @@ class Agent:
             gradientSteps,
             initialExtraNoise,
             extraNoiseDecay,
-            evaluationEvery
+            evaluationEvery,
+            numFinalEvaluations
         ):
         self.graph = tf.Graph()
         self.numStateVariables = 24
@@ -65,6 +66,7 @@ class Agent:
         self.extraNoiseMax = initialExtraNoise
         self.extraNoiseDecay = extraNoiseDecay
         self.evaluationEvery = evaluationEvery
+        self.numFinalEvaluations = numFinalEvaluations
         with self.graph.as_default():
             self.sess = tf.Session()
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name="State_Placeholder")
@@ -531,7 +533,7 @@ class Agent:
             self.saver.save(self.sess, "./models/"+self.name)
         os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/checkpoint_"+str(self.checkpointNum)+"/")
         self.checkpointNum += 1
-    def episode(self, steps, evaluation):
+    def episode(self, steps, evaluation, upload):
         state = self.env.reset()
         self.state = np.reshape(state, [self.numStateVariables,])
         self.totalEpisodeReward = 0
@@ -549,7 +551,7 @@ class Agent:
         print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
         if self.showGraphs:
             self.updateGraphs()
-        if evaluation and self.saveModel:
+        if upload:
             self.syncModelToS3(self.checkpointNum)
     def execute(self):
         with self.graph.as_default():
@@ -563,10 +565,11 @@ class Agent:
         for episodeNum in range(self.maxEpisodes):
             if self.outOfTime():
                 break
-            self.episode(steps=self.trainSteps, evaluation=False)
+            self.episode(steps=self.trainSteps, evaluation=False, upload=False)
             if episodeNum % self.evaluationEvery == 0:
-                self.episode(steps=self.testSteps, evaluation=True)
-        self.episode(steps=self.testSteps, evaluation=True)
+                self.episode(steps=self.testSteps, evaluation=True, upload=True)
+        for i in range(self.numFinalEvaluations):
+            self.episode(steps=self.testSteps, evaluation=True, upload=(i == 0))
         return self.evaluations
             
 
