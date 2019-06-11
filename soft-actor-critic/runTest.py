@@ -15,7 +15,7 @@ agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
 
-experimentName = "bipedal-walker-to-s3"
+experimentName = "bipedal-walker-training-steps"
 
 rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
