@@ -67,7 +67,7 @@ except:
     print("Unexpected error:", sys.exc_info()[0])
     results = [-20000]
 for resultNum in range(len(results)):
-    cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}')".format(
+    cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, trainingSteps, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}')".format(
             experimentName,
             0,
             0,
@@ -79,8 +79,9 @@ for resultNum in range(len(results)):
             0,
             0,
             0,
-            results[resultNum],
+            results[resultNum][0],
             "checkpoint_"+str(resultNum),
+            results[resultNum][1]
             agentName
         )
     )

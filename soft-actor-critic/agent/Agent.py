@@ -218,6 +218,7 @@ class Agent:
         self.entropyOverTime = deque([], 400)
         self.extraNoiseOverTime = deque([], 80000)
         self.lastGlobalStep = 0
+        self.trainingSteps = 0
         self.lastTime = time.time()
         if showGraphs:
             self.buildGraphs()
@@ -515,6 +516,7 @@ class Agent:
                 self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD)
             }
         )
+        self.trainingSteps += 1
         self.q1Loss.append(q1Loss)
         self.q2Loss.append(q2Loss)
         self.q1RegTerm.append(q1RegTerm)
@@ -552,7 +554,10 @@ class Agent:
         if not done:
             self.goToNextState(deterministic=evaluation, endEarly=True)
         if evaluation:
-            self.evaluations.append(self.totalEpisodeReward)
+            self.evaluations.append([
+                self.totalEpisodeReward,
+                self.trainingSteps
+            ])
         self.episodeRewards.append(self.totalEpisodeReward)
         fps = self.updateFps()
         print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
