@@ -42,6 +42,8 @@ class Agent:
             render,
             showGraphs,
             saveModel,
+            restoreModel,
+            train,
             minStepsBeforeTraining,
             actionScaling,
             actionShift,
@@ -67,6 +69,8 @@ class Agent:
         self.extraNoiseDecay = extraNoiseDecay
         self.evaluationEvery = evaluationEvery
         self.numFinalEvaluations = numFinalEvaluations
+        self.restoreModel = restoreModel
+        self.train = train
         with self.graph.as_default():
             self.sess = tf.Session()
             self.statePh = tf.placeholder(tf.float32, [None, self.numStateVariables], name="State_Placeholder")
@@ -431,7 +435,7 @@ class Agent:
         self.memoryBuffer.add(memoryEntry)
         self.globalStep += 1
         self.totalEpisodeReward = self.totalEpisodeReward + reward
-        if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining:
+        if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining and self.train:
             for i in range(self.gradientSteps):
                 self.train()
         return done
@@ -528,11 +532,14 @@ class Agent:
         self.lastTime = newTime
         self.fpsOverTime.append(fps)
         return fps
-    def syncModelToS3(self, checkpointNum):
+    def syncModelToS3(self):
         with self.graph.as_default():
             self.saver.save(self.sess, "./models/"+self.name)
         os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/checkpoint_"+str(self.checkpointNum)+"/")
         self.checkpointNum += 1
+    def loadModel(self):
+        with self.graph.as_default():
+            self.saver.restore(self.sess, "./models/"+self.name)
     def episode(self, steps, evaluation, upload):
         state = self.env.reset()
         self.state = np.reshape(state, [self.numStateVariables,])
@@ -552,13 +559,16 @@ class Agent:
         if self.showGraphs:
             self.updateGraphs()
         if upload:
-            self.syncModelToS3(self.checkpointNum)
+            self.syncModelToS3()
     def execute(self):
         with self.graph.as_default():
             self.sess.run(tf.global_variables_initializer())
-            if self.saveModel:
+            if self.saveModel or self.restoreModel:
                 self.saver = tf.train.Saver()
-        self.sess.run([self.hardCopy1, self.hardCopy2])
+        if self.restoreModel:
+            self.loadModel()
+        if self.train:
+            self.sess.run([self.hardCopy1, self.hardCopy2])
         self.globalStep = 0
         self.checkpointNum = 0
         self.evaluations = []
@@ -567,9 +577,10 @@ class Agent:
                 break
             self.episode(steps=self.trainSteps, evaluation=False, upload=False)
             if episodeNum % self.evaluationEvery == 0:
-                self.episode(steps=self.testSteps, evaluation=True, upload=True)
-        for i in range(self.numFinalEvaluations):
-            self.episode(steps=self.testSteps, evaluation=True, upload=(i == 0))
+                self.episode(steps=self.testSteps, evaluation=True, upload=self.saveModel)
+        for i in range(1, self.numFinalEvaluations):
+            self.episode(steps=self.testSteps, evaluation=True, upload=False)
+        self.episode(steps=self.testSteps, evaluation=True, upload=self.saveModel)
         return self.evaluations
             
 

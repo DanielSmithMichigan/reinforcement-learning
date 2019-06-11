@@ -55,7 +55,7 @@ try:
         gradientSteps=1,
         initialExtraNoise=0,
         extraNoiseDecay=0,
-        evaluationEvery=250,
+        evaluationEvery=50,
         numFinalEvaluations=10
     )
 
