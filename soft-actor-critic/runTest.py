@@ -20,7 +20,7 @@ experimentName = "bipedal-walker-priority"
 rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
-maxMinutes = 240
+maxMinutes = 45
 priorityExponent = np.random.uniform(0, 1)
 
 
