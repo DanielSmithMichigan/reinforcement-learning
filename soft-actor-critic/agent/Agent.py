@@ -78,6 +78,7 @@ class Agent:
             self.actionsPh = tf.placeholder(tf.float32, [None, self.numActions], name="Actions_Placeholder")
             self.rewardsPh = tf.placeholder(tf.float32, [None, ], name="Rewards_Placeholder")
             self.terminalsPh = tf.placeholder(tf.float32, [None, ], name="Terminals_Placeholder")
+            self.memoryPriorityPh = tf.placeholder(tf.float32, [None, ], name="MemoryPriority_Placeholder")
         self.trainingOperations = []
         self.env = gym.make('BipedalWalker-v2')
         self.startTime = time.time()
@@ -100,6 +101,7 @@ class Agent:
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
             terminalsPh=self.terminalsPh,
+            memoryPriorityPh=self.memoryPriorityPh,
             maxGradientNorm=maxGradientNorm
         )
 
@@ -119,6 +121,7 @@ class Agent:
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
             terminalsPh=self.terminalsPh,
+            memoryPriorityPh=self.memoryPriorityPh,
             maxGradientNorm=maxGradientNorm
         )
         
@@ -137,6 +140,7 @@ class Agent:
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
             terminalsPh=self.terminalsPh,
+            memoryPriorityPh=self.memoryPriorityPh,
             maxGradientNorm=maxGradientNorm
         )
         
@@ -155,6 +159,7 @@ class Agent:
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
             terminalsPh=self.terminalsPh,
+            memoryPriorityPh=self.memoryPriorityPh,
             maxGradientNorm=maxGradientNorm
         )
 
@@ -446,7 +451,8 @@ class Agent:
         (
             qNetwork1Training,
             q1Loss,
-            q1RegTerm
+            q1RegTerm,
+            q1BatchwiseLoss
         ) = self.qNetwork1.buildTrainingOperation()
 
         self.qNetwork2.setTargetNetworks(self.qNetwork1Target, self.qNetwork2Target)
@@ -454,7 +460,8 @@ class Agent:
         (
             qNetwork2Training,
             q2Loss,
-            q2RegTerm
+            q2RegTerm,
+            q2BatchwiseLoss
         ) = self.qNetwork2.buildTrainingOperation()
 
         self.policyNetwork.setQNetwork(self.qNetwork1)
@@ -481,8 +488,10 @@ class Agent:
                 softCopy1,
                 softCopy2,
                 q1Loss,
+                q1BatchwiseLoss,
                 q1RegTerm,
                 q2Loss,
+                q2BatchwiseLoss,
                 q2RegTerm,
                 policyRegTerm,
                 entropyCoefficientLoss,
@@ -499,8 +508,10 @@ class Agent:
             softCopy1,
             softCopy2,
             q1Loss,
+            q1BatchwiseLoss,
             q1RegTerm,
             q2Loss,
+            q2BatchwiseLoss,
             q2RegTerm,
             policyRegTerm,
             entropyCoefficientLoss,
@@ -513,7 +524,8 @@ class Agent:
                 self.nextStatePh: util.getColumn(trainingMemories, constants.NEXT_STATE),
                 self.actionsPh: util.getColumn(trainingMemories, constants.ACTION),
                 self.terminalsPh: util.getColumn(trainingMemories, constants.IS_TERMINAL),
-                self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD)
+                self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD),
+                self.memoryPriorityPh: util.getColumn(trainingMemories, constants.PRIORITY)
             }
         )
         self.trainingSteps += 1
@@ -524,6 +536,9 @@ class Agent:
         self.policyRegTerm.append(policyRegTerm)
         self.entropyCoefficientLoss.append(entropyCoefficientLoss)
         self.entropyCoefficientOverTime.append(entropyCoefficient)
+        for i in range(len(trainingMemories)):
+            trainingMemories[i][constants.LOSS] = (q1BatchwiseLoss[i] + q2BatchwiseLoss[i]) / 2
+        self.memoryBuffer.updateMemories(trainingMemories)
         self.logger.add_summary(summary, self.globalStep)
     def updateFps(self):
         newTime = time.time()

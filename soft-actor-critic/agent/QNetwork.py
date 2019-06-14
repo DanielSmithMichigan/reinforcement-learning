@@ -22,6 +22,7 @@ class QNetwork:
             actionsPh,
             rewardsPh,
             terminalsPh,
+            memoryPriorityPh,
             maxGradientNorm
         ):
         self.sess = sess
@@ -31,6 +32,7 @@ class QNetwork:
         self.actionsPh = actionsPh
         self.rewardsPh = rewardsPh
         self.terminalsPh = terminalsPh
+        self.memoryPriorityPh = memoryPriorityPh
         self.maxGradientNorm = maxGradientNorm
         self.name = name
         self.numStateVariables = numStateVariables
@@ -102,7 +104,9 @@ class QNetwork:
             predictedQ = self.buildNetwork(self.statePh, self.actionsPh)
             predictedQ = tf.reshape(predictedQ, [-1])
             absDiff = targetQ - predictedQ
-            loss = 0.5 * tf.reduce_mean(absDiff ** 2)
+            batchwiseLoss = .5 * (absDiff ** 2)
+            proportionedLoss = batchwiseLoss / self.memoryPriorityPh
+            loss = tf.reduce_mean(proportionedLoss)
             tf.summary.scalar(self.name+" Loss", loss)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
             uncappedGradients, variables = zip(
@@ -115,7 +119,7 @@ class QNetwork:
                 cappedGradients,
                 regTerm
             ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
-            return optimizer.apply_gradients(zip(cappedGradients, variables)), loss, regTerm
+            return optimizer.apply_gradients(zip(cappedGradients, variables)), loss, regTerm, batchwiseLoss
     def buildAssessmentOperation(self, actions):
         with self.graph.as_default():
             self.assessmentOperation = self.buildNetwork(self.statePh, actions)

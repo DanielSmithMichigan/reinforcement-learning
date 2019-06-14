@@ -15,28 +15,29 @@ agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
 
-experimentName = "bipedal-walker-training-steps"
+experimentName = "bipedal-walker-priority"
 
 rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
 maxMinutes = 240
+priorityExponent = np.random.uniform(0, 1)
 
 
 try:
     agent = Agent(
         name=agentName,
         actionScaling=1.0,
-        policyNetworkSize=[256, 256],
-        qNetworkSize=[256, 256],
+        policyNetworkSize=[64, 64],
+        qNetworkSize=[64, 64],
         policyNetworkLearningRate=3e-4,
         qNetworkLearningRate=3e-4,
         entropyCoefficient="auto",
         tau=0.005,
         gamma=0.99,
         maxMemoryLength=int(5e6),
-        priorityExponent=0.0,
-        batchSize=256,
+        priorityExponent=priorityExponent,
+        batchSize=64,
         maxEpisodes=4096,
         trainSteps=1024,
         minStepsBeforeTraining=4096,
@@ -69,7 +70,7 @@ except:
 for resultNum in range(len(results)):
     cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, trainingSteps, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}')".format(
             experimentName,
-            0,
+            priorityExponent,
             0,
             0,
             0,
