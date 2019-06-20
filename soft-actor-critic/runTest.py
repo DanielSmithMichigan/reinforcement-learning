@@ -15,12 +15,12 @@ agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
 
-experimentName = "bipedal-walker-priority"
+experimentName = "bipedal-walker-priority-2"
 
 rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
-maxMinutes = 45
+maxMinutes = 180
 priorityExponent = np.random.uniform(0, 1)
 
 
