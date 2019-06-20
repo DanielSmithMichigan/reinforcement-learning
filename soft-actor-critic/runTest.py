@@ -21,7 +21,8 @@ rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
 maxMinutes = 180
-priorityExponent = np.random.uniform(0, 1)
+priorityExponent = np.random.uniform(0, 1) if np.random.uniform() < .25 else 0.0
+    
 
 
 try:
