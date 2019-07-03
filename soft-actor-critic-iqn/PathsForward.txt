@@ -1,0 +1,4 @@
+#1: Is shape right with the target q in QNetwork
+#2: Check on exploration
+#3: EntropyValue and minQValue have different shapes. Is that a huge deal?
+#4: Value network needs to predict entropy value. But entropy value seems pretty unpredictable. Maybe theres an issue here.

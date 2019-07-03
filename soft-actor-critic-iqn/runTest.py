@@ -15,17 +15,13 @@ agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
 
-<<<<<<< HEAD
-experimentName = "bipedal-walker-priority-3"
-=======
-experimentName = "bipedal-walker-entropy-bonus-2"
->>>>>>> Added entropy bonus back to q value
+experimentName = "bipedal-walker-priority-2"
 
 rewardScaling = 10.0 ** -0.75
 initialExtraNoise = np.random.uniform(0, 0.5)
 extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
 maxMinutes = 180
-priorityExponent = np.random.uniform() if np.random.uniform() < .8 else 0.0
+priorityExponent = np.random.uniform(0, 1) if np.random.uniform() < .25 else 0.0
     
 
 
@@ -33,15 +29,10 @@ try:
     agent = Agent(
         name=agentName,
         actionScaling=1.0,
-        policyNetworkSize=[256, 256],
-        qNetworkSize=[256, 256],
-<<<<<<< HEAD
+        policyNetworkSize=[64, 64],
+        qNetworkSize=[64, 64],
         policyNetworkLearningRate=3e-4,
         qNetworkLearningRate=3e-4,
-=======
-        policyNetworkLearningRate=4e-3,
-        qNetworkLearningRate=4e-3,
->>>>>>> Added entropy bonus back to q value
         entropyCoefficient="auto",
         tau=0.005,
         gamma=0.99,

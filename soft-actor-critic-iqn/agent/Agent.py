@@ -26,12 +26,16 @@ class Agent:
     def __init__(self,
             name,
             policyNetworkSize,
-            qNetworkSize,
+            qNetworkSizePre,
+            qNetworkSizePost,
+            numQuantiles,
+            embeddingDimension,
             policyNetworkLearningRate,
             qNetworkLearningRate,
             entropyCoefficient,
             tau,
             gamma,
+            kappa,
             maxMemoryLength,
             priorityExponent,
             batchSize,
@@ -42,6 +46,7 @@ class Agent:
             render,
             showGraphs,
             saveModel,
+            saveModelToS3,
             restoreModel,
             train,
             minStepsBeforeTraining,
@@ -79,11 +84,14 @@ class Agent:
             self.rewardsPh = tf.placeholder(tf.float32, [None, ], name="Rewards_Placeholder")
             self.terminalsPh = tf.placeholder(tf.float32, [None, ], name="Terminals_Placeholder")
             self.memoryPriorityPh = tf.placeholder(tf.float32, [None, ], name="MemoryPriority_Placeholder")
+            self.quantileThresholdsPh = tf.placeholder(tf.float32, [None, numQuantiles], "QuantileThresholds_Placeholder")
+            self.nextQuantileThresholdsPh = tf.placeholder(tf.float32, [None, numQuantiles], "NextQuantileThresholds_Placeholder")
         self.trainingOperations = []
         self.env = gym.make('BipedalWalker-v2')
         self.startTime = time.time()
         self.randomStartSteps = randomStartSteps
         self.saveModel = saveModel
+        self.saveModelToS3 = saveModelToS3
         self.gradientSteps = gradientSteps
 
         self.qNetwork1 = QNetwork(
@@ -92,8 +100,12 @@ class Agent:
             name="QNetwork_1_"+name,
             numStateVariables=self.numStateVariables,
             numActions=self.numActions,
-            networkSize=qNetworkSize,
+            preNetworkSize=qNetworkSizePre,
+            postNetworkSize=qNetworkSizePost,
+            numQuantiles=numQuantiles,
+            embeddingDimension=embeddingDimension,
             gamma=gamma,
+            kappa=kappa,
             learningRate=qNetworkLearningRate,
             showGraphs=showGraphs,
             statePh=self.statePh,
@@ -101,6 +113,8 @@ class Agent:
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
             terminalsPh=self.terminalsPh,
+            quantileThresholdsPh=self.quantileThresholdsPh,
+            nextQuantileThresholdsPh=self.nextQuantileThresholdsPh,
             memoryPriorityPh=self.memoryPriorityPh,
             maxGradientNorm=maxGradientNorm
         )
@@ -112,8 +126,12 @@ class Agent:
             name="QNetwork_1_Target_"+name,
             numStateVariables=self.numStateVariables,
             numActions=self.numActions,
-            networkSize=qNetworkSize,
+            preNetworkSize=qNetworkSizePre,
+            postNetworkSize=qNetworkSizePost,
+            numQuantiles=numQuantiles,
+            embeddingDimension=embeddingDimension,
             gamma=gamma,
+            kappa=kappa,
             learningRate=qNetworkLearningRate,
             showGraphs=showGraphs,
             statePh=self.statePh,
@@ -121,44 +139,8 @@ class Agent:
             actionsPh=self.actionsPh,
             rewardsPh=self.rewardsPh,
             terminalsPh=self.terminalsPh,
-            memoryPriorityPh=self.memoryPriorityPh,
-            maxGradientNorm=maxGradientNorm
-        )
-        
-        self.qNetwork2 = QNetwork(
-            sess=self.sess,
-            graph=self.graph,
-            name="QNetwork_2_"+name,
-            numStateVariables=self.numStateVariables,
-            numActions=self.numActions,
-            networkSize=qNetworkSize,
-            gamma=gamma,
-            learningRate=qNetworkLearningRate,
-            showGraphs=showGraphs,
-            statePh=self.statePh,
-            nextStatePh=self.nextStatePh,
-            actionsPh=self.actionsPh,
-            rewardsPh=self.rewardsPh,
-            terminalsPh=self.terminalsPh,
-            memoryPriorityPh=self.memoryPriorityPh,
-            maxGradientNorm=maxGradientNorm
-        )
-        
-        self.qNetwork2Target = QNetwork(
-            sess=self.sess,
-            graph=self.graph,
-            name="QNetwork_2_Target_"+name,
-            numStateVariables=self.numStateVariables,
-            numActions=self.numActions,
-            networkSize=qNetworkSize,
-            gamma=gamma,
-            learningRate=qNetworkLearningRate,
-            showGraphs=showGraphs,
-            statePh=self.statePh,
-            nextStatePh=self.nextStatePh,
-            actionsPh=self.actionsPh,
-            rewardsPh=self.rewardsPh,
-            terminalsPh=self.terminalsPh,
+            quantileThresholdsPh=self.quantileThresholdsPh,
+            nextQuantileThresholdsPh=self.nextQuantileThresholdsPh,
             memoryPriorityPh=self.memoryPriorityPh,
             maxGradientNorm=maxGradientNorm
         )
@@ -174,6 +156,7 @@ class Agent:
             batchSize=batchSize,
             showGraphs=showGraphs,
             statePh=self.statePh,
+            quantileThresholdsPh=self.quantileThresholdsPh,
             targetEntropy=targetEntropy,
             entropyCoefficient=entropyCoefficient,
             maxGradientNorm=maxGradientNorm,
@@ -201,6 +184,7 @@ class Agent:
         self.maxEpisodes = maxEpisodes
         self.trainSteps = trainSteps
         self.rewardScaling = rewardScaling
+        self.numQuantiles = numQuantiles
         self.gamma = gamma
         self.stepsPerUpdate = stepsPerUpdate
         self.render = render
@@ -225,9 +209,10 @@ class Agent:
         self.lastGlobalStep = 0
         self.trainingSteps = 0
         self.lastTime = time.time()
+        with self.graph.as_default():
+            self.logger = tf.summary.FileWriter('./log', graph_def=self.sess.graph_def)
         if showGraphs:
             self.buildGraphs()
-        # self.logger = tf.summary.FileWriter('./log', graph_def=self.sess.graph_def)
     def buildGraphs(self):
         plt.ion()
         # self.buildAssessmentGraphs()
@@ -342,7 +327,8 @@ class Agent:
         ) = self.sess.run(
             self.graphingOperations,
             feed_dict={
-                self.statePh: states
+                self.statePh: states,
+                self.quantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(len(states), self.numQuantiles))
             }
         )
         actionsChosenImg = np.reshape(actionsChosen, [constants.IMAGE_SIZE, constants.IMAGE_SIZE])
@@ -374,7 +360,10 @@ class Agent:
                 logProb,
                 deterministicActionChosen
             ) = self.policyNetwork.buildNetwork(self.statePh)
-            qAssessment = self.qNetwork1.buildNetwork(self.statePh, actionsChosen)
+            (
+                quantileThresholds,
+                qAssessment
+            ) = self.qNetwork1.buildNetwork(self.statePh, actionsChosen, self.quantileThresholdsPh)
             self.actionOperations = [
                 rawAction,
                 actionsChosen,
@@ -395,7 +384,10 @@ class Agent:
                 logProb,
                 deterministicActionChosen
             ) = self.policyNetwork.buildNetwork(self.statePh)
-            qAssessment = self.qNetwork1.buildNetwork(self.statePh, actionsChosen)
+            (
+                quantileThresholds,
+                qAssessment
+            ) = self.qNetwork1.buildNetwork(self.statePh, actionsChosen, self.quantileThresholdsPh)
             self.graphingOperations = [
                 actionsChosen,
                 qAssessment
@@ -410,7 +402,8 @@ class Agent:
         ) = self.sess.run(
             self.actionOperations,
             feed_dict={
-                self.statePh: [self.state]
+                self.statePh: [self.state],
+                self.quantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(1, self.numQuantiles))
             }
         )
         actionsChosen = actionsChosen[0] if not deterministic else deterministicAction[0]
@@ -446,7 +439,7 @@ class Agent:
                 self.trainNetworks()
         return done
     def buildTrainingOperation(self):
-        self.qNetwork1.setTargetNetworks(self.qNetwork1Target, self.qNetwork2Target)
+        self.qNetwork1.setTargetNetworks(self.qNetwork1Target)
         self.qNetwork1.setPolicyNetwork(self.policyNetwork)
         (
             qNetwork1Training,
@@ -454,15 +447,6 @@ class Agent:
             q1RegTerm,
             q1BatchwiseLoss
         ) = self.qNetwork1.buildTrainingOperation()
-
-        self.qNetwork2.setTargetNetworks(self.qNetwork1Target, self.qNetwork2Target)
-        self.qNetwork2.setPolicyNetwork(self.policyNetwork)
-        (
-            qNetwork2Training,
-            q2Loss,
-            q2RegTerm,
-            q2BatchwiseLoss
-        ) = self.qNetwork2.buildTrainingOperation()
 
         self.policyNetwork.setQNetwork(self.qNetwork1)
         (
@@ -474,49 +458,37 @@ class Agent:
         ) = self.policyNetwork.buildTrainingOperation()
 
         softCopy1 = self.qNetwork1Target.buildSoftCopyOperation(self.qNetwork1, self.tau)
-        softCopy2 = self.qNetwork2Target.buildSoftCopyOperation(self.qNetwork2, self.tau)
 
         self.hardCopy1 = self.qNetwork1Target.buildSoftCopyOperation(self.qNetwork1, 1.0)
-        self.hardCopy2 = self.qNetwork2Target.buildSoftCopyOperation(self.qNetwork2, 1.0)
 
         with self.graph.as_default():
             self.trainingOperations = [
                 qNetwork1Training,
-                qNetwork2Training,
                 policyTrainingOperation,
                 entropyCoefficientTrainingOperation,
                 softCopy1,
-                softCopy2,
                 q1Loss,
                 q1BatchwiseLoss,
                 q1RegTerm,
-                q2Loss,
-                q2BatchwiseLoss,
-                q2RegTerm,
                 policyRegTerm,
                 entropyCoefficientLoss,
-                entropyCoefficient
-                # tf.summary.merge_all()
+                entropyCoefficient,
+                tf.summary.merge_all()
             ]
     def trainNetworks(self):
         trainingMemories = self.memoryBuffer.getMemoryBatch()
         (
             qNetwork1Training,
-            qNetwork2Training,
             policyTrainingOperation,
             entropyCoefficientTrainingOperation,
             softCopy1,
-            softCopy2,
             q1Loss,
             q1BatchwiseLoss,
             q1RegTerm,
-            q2Loss,
-            q2BatchwiseLoss,
-            q2RegTerm,
             policyRegTerm,
             entropyCoefficientLoss,
-            entropyCoefficient
-            # summary
+            entropyCoefficient,
+            summary
         ) = self.sess.run(
             self.trainingOperations,
             feed_dict={
@@ -525,21 +497,21 @@ class Agent:
                 self.actionsPh: util.getColumn(trainingMemories, constants.ACTION),
                 self.terminalsPh: util.getColumn(trainingMemories, constants.IS_TERMINAL),
                 self.rewardsPh: util.getColumn(trainingMemories, constants.REWARD),
-                self.memoryPriorityPh: util.getColumn(trainingMemories, constants.PRIORITY)
+                # self.memoryPriorityPh: util.getColumn(trainingMemories, constants.PRIORITY),
+                self.quantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(self.batchSize, self.numQuantiles)),
+                self.nextQuantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(self.batchSize, self.numQuantiles))
             }
         )
         self.trainingSteps += 1
         self.q1Loss.append(q1Loss)
-        self.q2Loss.append(q2Loss)
         self.q1RegTerm.append(q1RegTerm)
-        self.q2RegTerm.append(q2RegTerm)
         self.policyRegTerm.append(policyRegTerm)
         self.entropyCoefficientLoss.append(entropyCoefficientLoss)
         self.entropyCoefficientOverTime.append(entropyCoefficient)
         for i in range(len(trainingMemories)):
-            trainingMemories[i][constants.LOSS] = (q1BatchwiseLoss[i] + q2BatchwiseLoss[i]) / 2
+            trainingMemories[i][constants.LOSS] = q1BatchwiseLoss[i]
         self.memoryBuffer.updateMemories(trainingMemories)
-        # self.logger.add_summary(summary, self.globalStep)
+        self.logger.add_summary(summary, self.globalStep)
     def updateFps(self):
         newTime = time.time()
         timeSpent = newTime - self.lastTime
@@ -552,7 +524,8 @@ class Agent:
     def syncModelToS3(self):
         with self.graph.as_default():
             self.saver.save(self.sess, "./models/"+self.name)
-        os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/checkpoint_"+str(self.checkpointNum)+"/")
+        if self.saveModelToS3:
+            os.system("aws s3 sync models/ s3://tensorflow-models-dan-smith/"+self.name+"/checkpoint_"+str(self.checkpointNum)+"/")
         self.checkpointNum += 1
     def loadModel(self):
         with self.graph.as_default():
@@ -575,7 +548,7 @@ class Agent:
             ])
         self.episodeRewards.append(self.totalEpisodeReward)
         fps = self.updateFps()
-        print("REWARD: "+str(self.totalEpisodeReward)+" FPS: "+str(fps))
+        print("REWARD: "+str(self.totalEpisodeReward)+" STEPS: "+str(self.trainingSteps)+" FPS: "+str(fps))
         if self.showGraphs:
             self.updateGraphs()
         if upload:
@@ -588,7 +561,7 @@ class Agent:
         if self.restoreModel:
             self.loadModel()
         if self.train:
-            self.sess.run([self.hardCopy1, self.hardCopy2])
+            self.sess.run([self.hardCopy1])
         self.globalStep = 0
         self.checkpointNum = 0
         self.evaluations = []

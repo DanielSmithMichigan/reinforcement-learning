@@ -80,6 +80,7 @@ class PolicyNetwork:
             batchSize,
             showGraphs,
             statePh,
+            quantileThresholdsPh,
             targetEntropy,
             entropyCoefficient,
             maxGradientNorm,
@@ -96,6 +97,7 @@ class PolicyNetwork:
         self.learningRate = learningRate
         self.batchSize = batchSize
         self.statePh = statePh
+        self.quantileThresholdsPh = quantileThresholdsPh
         self.entropyCoefficientVal = entropyCoefficient
         self.maxGradientNorm = maxGradientNorm
         self.varianceRegularizationConstant = varianceRegularizationConstant
@@ -189,18 +191,21 @@ class PolicyNetwork:
                 entropyCoefficientTrainingOperation = entropyOptimizer.minimize(entropyCoefficientLoss, var_list=self.logEntropyCoefficient)
 
             #Policy
-            qValue = self.qNetwork.buildNetwork(self.statePh, actionsChosen)
+            (
+                _,
+                qValue
+            ) = self.qNetwork.buildNetwork(self.statePh, actionsChosen, self.quantileThresholdsPh)
             qCost = -tf.reshape(qValue, [-1])
             entropyCost = tf.stop_gradient(self.entropyCoefficient) * logProb
             varianceRegLoss = self.varianceRegularizationConstant * 0.5 * tf.reduce_mean(uncleanedActionVariance ** 2, axis=1)
             meanRegLoss = self.meanRegularizationConstant * 0.5 * tf.reduce_mean(actionMean ** 2, axis=1)
             batchLoss = entropyCost + qCost + varianceRegLoss + meanRegLoss
-            # tf.summary.scalar(self.name+" qCost", tf.reduce_mean(qCost, axis=0))
-            # tf.summary.scalar(self.name+" Entropy Cost", tf.reduce_mean(entropyCost, axis=0))
+            tf.summary.scalar(self.name+" qCost", tf.reduce_mean(qCost, axis=0))
+            tf.summary.scalar(self.name+" Entropy Cost", tf.reduce_mean(entropyCost, axis=0))
             loss = tf.reduce_mean(
                 batchLoss
             )
-            # tf.summary.scalar(self.name+" Loss", loss)
+            tf.summary.scalar(self.name+" Loss", loss)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
             uncappedGradients, variables = zip(
                 *optimizer.compute_gradients(
@@ -212,7 +217,7 @@ class PolicyNetwork:
                 cappedGradients,
                 regTerm
             ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
-            # tf.summary.scalar(self.name+" Reg Term", regTerm)
+            tf.summary.scalar(self.name+" Reg Term", regTerm)
             trainingOperation = optimizer.apply_gradients(zip(cappedGradients, variables))
             return (
                 trainingOperation,

@@ -100,14 +100,15 @@ class QNetwork:
             minQ = tf.concat([nextQValuesQ1, nextQValuesQ2], axis=1)
             minQ = tf.reduce_min(minQ, axis=1)
             minQ = tf.reshape(minQ, [-1])
-            targetQ = self.rewardsPh + self.gamma * (1 - self.terminalsPh) * tf.stop_gradient(minQ)
+            entropyBonus = -1 * tf.stop_gradient(self.policyNetwork.entropyCoefficient) * nextLogProb
+            targetQ = self.rewardsPh + self.gamma * (1 - self.terminalsPh) * (tf.stop_gradient(minQ) + entropyBonus)
             predictedQ = self.buildNetwork(self.statePh, self.actionsPh)
             predictedQ = tf.reshape(predictedQ, [-1])
             absDiff = targetQ - predictedQ
             batchwiseLoss = .5 * (absDiff ** 2)
             proportionedLoss = batchwiseLoss / self.memoryPriorityPh
             loss = tf.reduce_mean(proportionedLoss)
-            tf.summary.scalar(self.name+" Loss", loss)
+            # tf.summary.scalar(self.name+" Loss", loss)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
             uncappedGradients, variables = zip(
                 *optimizer.compute_gradients(
