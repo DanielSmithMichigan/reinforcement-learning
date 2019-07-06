@@ -6,19 +6,21 @@ import numpy as np
 import nevergrad as ng
 import tensorflow as tf
 import gym
+import math
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
-experimentName = "bipedal-walker-priority-3"
+experimentName = "bipedal-walker-min-steps"
 
 rewardScaling = 10.0 ** -0.75
-initialExtraNoise = np.random.uniform(0, 0.5)
-extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
+initialExtraNoise = 0
+extraNoiseDecay = 0
 maxMinutes = 180
-priorityExponent = np.random.uniform() if np.random.uniform() < .8 else 0.0
+priorityExponent = 0.0
+minStepsBeforeTraining = math.e ** np.random.uniform(low=8, high=12)
     
 
 
@@ -38,7 +40,7 @@ try:
         batchSize=64,
         maxEpisodes=4096,
         trainSteps=1024,
-        minStepsBeforeTraining=4096,
+        minStepsBeforeTraining=minStepsBeforeTraining,
         rewardScaling=rewardScaling,
         actionShift=0.0,
         stepsPerUpdate=1,
