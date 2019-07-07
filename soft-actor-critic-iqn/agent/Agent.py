@@ -209,8 +209,8 @@ class Agent:
         self.lastGlobalStep = 0
         self.trainingSteps = 0
         self.lastTime = time.time()
-        with self.graph.as_default():
-            self.logger = tf.summary.FileWriter('./log', graph_def=self.sess.graph_def)
+        # with self.graph.as_default():
+            # self.logger = tf.summary.FileWriter('./log', graph_def=self.sess.graph_def)
         if showGraphs:
             self.buildGraphs()
     def buildGraphs(self):
@@ -486,8 +486,7 @@ class Agent:
                 qRegTerm,
                 policyRegTerm,
                 entropyCoefficientLoss,
-                entropyCoefficient,
-                tf.summary.merge_all()
+                entropyCoefficient
             ]
     def trainNetworks(self):
         trainingMemories = self.memoryBuffer.getMemoryBatch()
@@ -501,8 +500,7 @@ class Agent:
             q1RegTerm,
             policyRegTerm,
             entropyCoefficientLoss,
-            entropyCoefficient,
-            summary
+            entropyCoefficient
         ) = self.sess.run(
             self.trainingOperations,
             feed_dict={
@@ -525,7 +523,6 @@ class Agent:
         for i in range(len(trainingMemories)):
             trainingMemories[i][constants.LOSS] = q1BatchwiseLoss[i]
         self.memoryBuffer.updateMemories(trainingMemories)
-        self.logger.add_summary(summary, self.globalStep)
     def updateFps(self):
         newTime = time.time()
         timeSpent = newTime - self.lastTime

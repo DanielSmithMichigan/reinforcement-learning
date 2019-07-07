@@ -6,52 +6,60 @@ import numpy as np
 import nevergrad as ng
 import tensorflow as tf
 import gym
+import math
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
-
-
-
-experimentName = "bipedal-walker-priority-2"
+experimentName = os.environ['EXPERIMENT_NAME']
 
 rewardScaling = 10.0 ** -0.75
-initialExtraNoise = np.random.uniform(0, 0.5)
-extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
+initialExtraNoise = 0
+extraNoiseDecay = 0
 maxMinutes = 180
-priorityExponent = np.random.uniform(0, 1) if np.random.uniform() < .25 else 0.0
-    
+priorityExponent = 0.0
+minStepsBeforeTraining = 4096
+
+if experimentName == 'bipedal-walker-min-steps-2':
+    minStepsBeforeTraining = math.e ** np.random.uniform(low=8, high=12)
+elif experimentName == 'bipedal-walker-max-minutes-2':
+    maxMinutes = np.random.randint(low=30,high=180)
 
 
 try:
     agent = Agent(
         name=agentName,
         actionScaling=1.0,
-        policyNetworkSize=[64, 64],
-        qNetworkSize=[64, 64],
+        policyNetworkSize=[256, 256],
+        qNetworkSizePre=[256, 256],
+        qNetworkSizePost=[256],
+        numQuantiles=8,
+        embeddingDimension=8,
         policyNetworkLearningRate=3e-4,
         qNetworkLearningRate=3e-4,
         entropyCoefficient="auto",
         tau=0.005,
         gamma=0.99,
+        kappa=1.0,
         maxMemoryLength=int(5e6),
-        priorityExponent=priorityExponent,
+        priorityExponent=0.0,
         batchSize=64,
         maxEpisodes=4096,
         trainSteps=1024,
         minStepsBeforeTraining=4096,
-        rewardScaling=rewardScaling,
+        rewardScaling=(10.0 ** -0.75),
         actionShift=0.0,
         stepsPerUpdate=1,
         render=False,
         showGraphs=False,
         saveModel=True,
+        saveModelToS3=True,
         restoreModel=False,
         train=True,
         testSteps=1024,
-        maxMinutes=maxMinutes,
+        maxMinutes=180,
         targetEntropy=-4.0,
         maxGradientNorm=5.0,
         meanRegularizationConstant=0.0,
@@ -60,7 +68,7 @@ try:
         gradientSteps=1,
         initialExtraNoise=0,
         extraNoiseDecay=0,
-        evaluationEvery=50,
+        evaluationEvery=25,
         numFinalEvaluations=10
     )
 
@@ -71,7 +79,7 @@ except:
 for resultNum in range(len(results)):
     cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, trainingSteps, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}')".format(
             experimentName,
-            priorityExponent,
+            0,
             0,
             0,
             0,

@@ -4,13 +4,13 @@ from agent.Agent import Agent
 rewardScaling = 10.0 ** -0.75
 
 agent = Agent(
-    name="agent_8034980",
+    name="agent_7859975",
     actionScaling=1.0,
     policyNetworkSize=[256, 256],
     qNetworkSizePre=[256, 256],
     qNetworkSizePost=[256],
-    numQuantiles=16,
-    embeddingDimension=16,
+    numQuantiles=8,
+    embeddingDimension=8,
     policyNetworkLearningRate=3e-4,
     qNetworkLearningRate=3e-4,
     entropyCoefficient="auto",
@@ -29,6 +29,7 @@ agent = Agent(
     render=True,
     showGraphs=False,
     saveModel=False,
+    saveModelToS3=False,
     restoreModel=True,
     train=False,
     testSteps=1024,
