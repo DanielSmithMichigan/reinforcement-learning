@@ -73,27 +73,15 @@ class QNetwork:
                         reuse=tf.AUTO_REUSE
                     )
                 # batchSize x N
-                quantileEmbedding = tf.reshape(quantileThresholds, [-1, self.numQuantiles, 1])
-                # batchSize x numQuantiles x 1
-                quantileEmbedding = tf.tile(quantileEmbedding, [1, 1, self.embeddingDimension])
-                # batchSize x numQuantiles x embeddingDimension
-                cosineTimestep = tf.pow(2.0, tf.cast(tf.range(self.embeddingDimension), tf.float32))
-                cosineTimestep = tf.reshape(cosineTimestep, [1, 1, self.embeddingDimension])
-                # 1 x 1 x embeddingDimension
-                quantileEmbedding = quantileEmbedding * cosineTimestep
-                # batchSize x numQuantiles x embeddingDimension
-                quantileEmbedding = tf.math.cos(quantileEmbedding * math.pi)
-                # batchSize x numQuantiles x embeddingDimension
                 prevLayer = tf.reshape(prevLayer, [-1, 1, self.preNetworkSize[-1]])
                 # batchSize x 1 x N
-                quantileEmbedding = tf.layers.dense(
-                    inputs=quantileEmbedding,
-                    units=self.preNetworkSize[-1],
-                    activation=tf.nn.leaky_relu,
-                    name="dense_embedding",
-                    reuse=tf.AUTO_REUSE
-                )
-                # batchSize x numQuantiles x N
+                (
+                    quantileEmbedding,
+                    _,
+                    _,
+                    _,
+                    _,
+                ) = self.buildQuantileEmbeddingNetwork(quantileThresholds)
                 prevLayer = quantileEmbedding * prevLayer
                 # batchSize x numQuantiles x N
                 for i in range(len(self.postNetworkSize)):
@@ -117,6 +105,33 @@ class QNetwork:
                 qValue = tf.reduce_mean(quantileValues, axis=1)
                 # batchSize
         return quantileValues, qValue
+    def buildQuantileEmbeddingNetwork(self, quantileThresholds):
+        quantileThresholds = tf.reshape(quantileThresholds, [-1, self.numQuantiles, 1])
+        # batchSize x numQuantiles x 1
+        tiledQuantiles = tf.tile(quantileThresholds, [1, 1, self.embeddingDimension])
+        # batchSize x numQuantiles x embeddingDimension
+        timestep = tf.pow(2.0, tf.cast(tf.range(self.embeddingDimension), tf.float32))
+        timestep = tf.reshape(timestep, [1, 1, self.embeddingDimension])
+        # 1 x 1 x embeddingDimension
+        portionedQuantiles = tiledQuantiles * timestep
+        # batchSize x numQuantiles x embeddingDimension
+        sawtooth = portionedQuantiles - tf.math.floor(portionedQuantiles)
+        # batchSize x numQuantiles x embeddingDimension
+        quantileEmbedding = tf.layers.dense(
+            inputs=sawtooth,
+            units=self.preNetworkSize[-1],
+            activation=tf.nn.leaky_relu,
+            name="dense_embedding",
+            reuse=tf.AUTO_REUSE
+        )
+        # batchSize x numQuantiles x N
+        return (
+            quantileEmbedding,
+            tiledQuantiles,
+            timestep,
+            portionedQuantiles,
+            sawtooth
+        )
     def buildSoftCopyOperation(self, otherNetwork, tau):
         with self.graph.as_default():
             return [tf.assign(t, (1 - tau) * t + tau * e) for t, e in zip(
@@ -145,27 +160,31 @@ class QNetwork:
                 _
             ) = self.policyNetwork.buildNetwork(self.nextStatePh)
             (
-                nextQuantileValuesQ1,
-                nextQValuesQ1
+                nextQuantileValues,
+                _
             ) = self.target1.buildNetwork(self.nextStatePh, nextActionsChosen, self.nextQuantileThresholdsPh)
             # batchSize x numQuantiles
             rewardsPh = tf.reshape(self.rewardsPh, [-1, 1])
             # batchSize x 1
             terminalsPh = tf.reshape(self.terminalsPh, [-1, 1])
             # batchSize x 1
-            targets = rewardsPh + self.gamma * (1 - terminalsPh) * tf.stop_gradient(nextQuantileValuesQ1)
+            entropyBonus = tf.reshape(-1 * self.policyNetwork.entropyCoefficient * nextLogProb, [-1, 1])
+            # batchSize x 1
+            targetValues = rewardsPh + self.gamma * (1 - terminalsPh) * tf.stop_gradient(nextQuantileValues + entropyBonus)
             # batchSize x numQuantiles
-            targets = tf.reshape(targets, [-1, 1, self.numQuantiles])
+            targetValues = tf.reshape(targetValues, [-1, 1, self.numQuantiles])
             # batchSize x 1 x numQuantiles
-            targets = tf.tile(targets, [1, self.numQuantiles, 1])
+            targets = tf.tile(targetValues, [1, self.numQuantiles, 1])
+            # Tiled down columns
             # batchSize x numQuantiles (tiled) x numQuantiles
             (
                 predictedQuantileValues,
-                predictedQ
+                _
             ) = self.buildNetwork(self.statePh, self.actionsPh, self.quantileThresholdsPh)
-            predictions = tf.reshape(predictedQuantileValues, [-1, self.numQuantiles, 1])
+            predictionValues = tf.reshape(predictedQuantileValues, [-1, self.numQuantiles, 1])
             # batchSize x numQuantiles x 1
-            predictions = tf.tile(predictions, [1, 1, self.numQuantiles])
+            predictions = tf.tile(predictionValues, [1, 1, self.numQuantiles])
+            # Tiled accross rows
             # batchSize x numQuantiles x numQuantiles (tiled)
             absDiff = tf.abs(targets - predictions)
             # batchSize x numQuantiles x numQuantiles
@@ -177,17 +196,16 @@ class QNetwork:
             # batchSize x numQuantiles x numQuantiles
             quantileThresholds = tf.reshape(self.quantileThresholdsPh, [-1, self.numQuantiles, 1])
             # batchSize x numQuantiles x 1
-            sizedQuantiles = tf.abs(quantileThresholds - tf.stop_gradient(tf.to_float(targets < predictions)))
+            quantilePunishment = tf.abs(quantileThresholds - tf.stop_gradient(tf.to_float(targets < predictions)))
             # batchSize x numQuantiles x numQuantiles
-            quantileRegressionLoss = sizedQuantiles * totalError / self.kappa
+            quantileRegressionLoss = quantilePunishment * totalError / self.kappa
             # batchSize x numQuantiles x numQuantiles
-            batchwiseLoss = tf.reduce_mean(quantileRegressionLoss, axis=2)
+            perQuantileLoss = tf.reduce_sum(quantileRegressionLoss, axis=2)
             # batchSize x numQuantiles
-            batchwiseLoss = tf.reduce_mean(batchwiseLoss, axis=1)
+            batchwiseLoss = tf.reduce_mean(perQuantileLoss, axis=1)
             # batchSize
             # proportionedLoss = batchwiseLoss / self.memoryPriorityPh
             loss = tf.reduce_mean(batchwiseLoss)
-            tf.summary.scalar(self.name+" Loss", loss)
             optimizer = tf.train.AdamOptimizer(self.learningRate)
             uncappedGradients, variables = zip(
                 *optimizer.compute_gradients(
@@ -199,7 +217,27 @@ class QNetwork:
                 cappedGradients,
                 regTerm
             ) = tf.clip_by_global_norm(uncappedGradients, self.maxGradientNorm)
-            return optimizer.apply_gradients(zip(cappedGradients, variables)), loss, regTerm, batchwiseLoss
+            optimizer = optimizer.apply_gradients(zip(cappedGradients, variables))
+            return (
+                optimizer,
+                loss,
+                regTerm,
+                batchwiseLoss,
+                nextLogProb,
+                nextQuantileValues,
+                entropyBonus,
+                targetValues,
+                targets,
+                predictionValues,
+                predictions,
+                absDiff,
+                minorError,
+                majorError,
+                totalError,
+                quantilePunishment,
+                quantileRegressionLoss,
+                perQuantileLoss
+            )
     def buildAssessmentOperation(self, actions):
         with self.graph.as_default():
             self.assessmentOperation = self.buildNetwork(self.statePh, actions, self.quantileThresholdsPh)

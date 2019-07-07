@@ -4,7 +4,7 @@ from agent.Agent import Agent
 rewardScaling = 10.0 ** -0.75
 
 agent = Agent(
-    name="agent_2108868",
+    name="agent_4157057",
     actionScaling=1.0,
     policyNetworkSize=[256, 256],
     qNetworkSize=[256, 256],

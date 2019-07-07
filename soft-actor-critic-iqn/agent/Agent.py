@@ -442,10 +442,24 @@ class Agent:
         self.qNetwork1.setTargetNetworks(self.qNetwork1Target)
         self.qNetwork1.setPolicyNetwork(self.policyNetwork)
         (
-            qNetwork1Training,
-            q1Loss,
-            q1RegTerm,
-            q1BatchwiseLoss
+            qNetworkTraining,
+            qLoss,
+            qRegTerm,
+            qBatchwiseLoss,
+            nextLogProb,
+            nextQuantileValues,
+            entropyBonus,
+            targetValues,
+            targets,
+            predictionValues,
+            predictions,
+            absDiff,
+            minorError,
+            majorError,
+            totalError,
+            quantilePunishment,
+            quantileRegressionLoss,
+            perQuantileLoss
         ) = self.qNetwork1.buildTrainingOperation()
 
         self.policyNetwork.setQNetwork(self.qNetwork1)
@@ -463,13 +477,13 @@ class Agent:
 
         with self.graph.as_default():
             self.trainingOperations = [
-                qNetwork1Training,
+                qNetworkTraining,
                 policyTrainingOperation,
                 entropyCoefficientTrainingOperation,
                 softCopy1,
-                q1Loss,
-                q1BatchwiseLoss,
-                q1RegTerm,
+                qLoss,
+                qBatchwiseLoss,
+                qRegTerm,
                 policyRegTerm,
                 entropyCoefficientLoss,
                 entropyCoefficient,
