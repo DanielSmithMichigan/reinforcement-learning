@@ -6,20 +6,26 @@ import numpy as np
 import nevergrad as ng
 import tensorflow as tf
 import gym
+import math
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 cur = db.cursor()
 results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
-experimentName = "bipedal-walker-priority-3"
+experimentName = os.environ['EXPERIMENT_NAME']
 
 rewardScaling = 10.0 ** -0.75
-initialExtraNoise = np.random.uniform(0, 0.5)
-extraNoiseDecay = 1.0 - (10 ** np.random.uniform(-7, -2))
+initialExtraNoise = 0
+extraNoiseDecay = 0
 maxMinutes = 180
-priorityExponent = np.random.uniform() if np.random.uniform() < .8 else 0.0
-    
+priorityExponent = 0.0
+minStepsBeforeTraining = 4096
+
+if experimentName == 'bipedal-walker-min-steps-2':
+    minStepsBeforeTraining = math.e ** np.random.uniform(low=8, high=12)
+elif experimentName == 'bipedal-walker-max-minutes-2':
+    maxMinutes = np.random.randint(low=30,high=180)
 
 
 try:
@@ -38,7 +44,7 @@ try:
         batchSize=64,
         maxEpisodes=4096,
         trainSteps=1024,
-        minStepsBeforeTraining=4096,
+        minStepsBeforeTraining=minStepsBeforeTraining,
         rewardScaling=rewardScaling,
         actionShift=0.0,
         stepsPerUpdate=1,
@@ -68,8 +74,8 @@ except:
 for resultNum in range(len(results)):
     cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, trainingSteps, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}')".format(
             experimentName,
-            priorityExponent,
-            0,
+            minStepsBeforeTraining,
+            maxMinutes,
             0,
             0,
             0,
