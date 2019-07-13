@@ -1,0 +1,1 @@
+pip3 install git+https://github.com/facebookresearch/nevergrad@master#egg=nevergrad
