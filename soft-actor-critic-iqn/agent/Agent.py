@@ -7,7 +7,6 @@ import math
 from collections import deque
 import multiprocessing
 import sys
-
 import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.colorbar import colorbar
