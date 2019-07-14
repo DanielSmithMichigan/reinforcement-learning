@@ -3,7 +3,6 @@ import os
 import sys
 from agent.Agent import Agent
 import numpy as np
-import nevergrad as ng
 import tensorflow as tf
 import gym
 import math
