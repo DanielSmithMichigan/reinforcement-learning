@@ -334,8 +334,7 @@ class Agent:
         colorbar(ax, cax=self.policyColorBar)
         self.policyFigure.canvas.draw()
     def outOfTime(self):
-        return (time.time() > self.startTime + (self.maxMinutes * 60))
-            or (self.globalStep >= self.maxTrainSteps)
+        return (time.time() > (self.startTime + self.maxMinutes * 60)) or (self.globalStep >= self.maxTrainSteps)
     def buildActionOperation(self):
         with self.graph.as_default():
             (
