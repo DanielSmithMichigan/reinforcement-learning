@@ -46,7 +46,11 @@ class QNetwork:
         self.kappa = kappa
         self.learningRate = learningRate
         with self.graph.as_default():
-            self.quantileThresholds = tf.linspace(0.0, 1.0, self.numQuantiles)
+            self.quantileThresholds = tf.constant(
+                np.linspace(0, 1, numQuantiles + 2)[1:numQuantiles+1],
+                dtype=tf.float32,
+                shape=[self.numQuantiles]
+            )
     def buildNetwork(self, state, actions):
         qValue = None
         with self.graph.as_default():
@@ -87,8 +91,8 @@ class QNetwork:
                     scope=otherNetwork.name
                 )
             )]
-    def setTargetNetworks(self, target1):
-        self.target1 = target1
+    def setTargetNetworks(self, targetNetwork):
+        self.targetNetwork = targetNetwork
     def setPolicyNetwork(self, policyNetwork):
         self.policyNetwork = policyNetwork
     def buildTrainingOperation(self):
@@ -107,7 +111,7 @@ class QNetwork:
             (
                 nextQuantileValues,
                 _
-            ) = self.target1.buildNetwork(self.nextStatePh, nextActionsChosen)
+            ) = self.targetNetwork.buildNetwork(self.nextStatePh, nextActionsChosen)
             # batchSize x numQuantiles
             rewardsPh = tf.reshape(self.rewardsPh, [-1, 1])
             # batchSize x 1

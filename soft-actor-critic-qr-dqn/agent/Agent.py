@@ -38,6 +38,7 @@ class Agent:
             priorityExponent,
             batchSize,
             maxEpisodes,
+            maxTrainSteps,
             trainSteps,
             rewardScaling,
             stepsPerUpdate,
@@ -169,6 +170,7 @@ class Agent:
 
         self.name = name
         self.maxEpisodes = maxEpisodes
+        self.maxTrainSteps = maxTrainSteps
         self.trainSteps = trainSteps
         self.rewardScaling = rewardScaling
         self.numQuantiles = numQuantiles
@@ -332,7 +334,8 @@ class Agent:
         colorbar(ax, cax=self.policyColorBar)
         self.policyFigure.canvas.draw()
     def outOfTime(self):
-        return time.time() > self.startTime + (self.maxMinutes * 60)
+        return (time.time() > self.startTime + (self.maxMinutes * 60))
+            or (self.globalStep >= self.maxTrainSteps)
     def buildActionOperation(self):
         with self.graph.as_default():
             (
