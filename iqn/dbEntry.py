@@ -7,10 +7,9 @@ import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 
 experimentName = "iqn-embedding-sawtooth"
-embeddingDimension = np.random.randint(low=4, high=16)
+embeddingDimension = np.random.randint(low=1, high=32)
 env = gym.make('LunarLander-v2')
 sess = tf.Session()
-rewardScaling = pow(10, np.random.uniform(low=-2, high=-1))
 a = Agent(
     sess=sess,
     env=env,
@@ -24,9 +23,9 @@ a = Agent(
     # test parameters
     episodesPerTest=25,
     stepsPerTrainingPeriod=4,
-    numTestPeriods=1024,
+    numTestPeriods=1200,
     numTestsPerTestPeriod=20,
-    maxRunningMinutes=60 * 4,
+    maxRunningMinutes=3600,
     episodeStepLimit=1024,
     intermediateTests=False,
 
@@ -39,7 +38,7 @@ a = Agent(
     # agentName="agent_842763505",
 
     # hyperparameters
-    rewardScaling=rewardScaling,
+    rewardScaling=pow(10, -.75),
     nStepReturns=1,
     maxMemoryLength=int(1e6),
     batchSize=64,
