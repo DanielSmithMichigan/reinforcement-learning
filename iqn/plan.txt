@@ -1,0 +1,31 @@
+#1 TODO: Fix training operations
+#2 TODO: Add more weight visualizations. Visualize last layer, and visualize input layer
+#3 TODO: Switch to montecarlo. Remove target network. 
+
+#3 TODO: Visualize agent choices as a line graph. Each episode outputs its count of each choice.
+#4 TODO: Update optimization calc to be one graph
+#6 TODO: Disable engine after so many steps, but let episode continue indefinitely?
+
+TODO: Figure out why loss is so high/low in some cases to cause numeric error when taking number to a power. Maybe limit gradient?
+TODO: Switch to montecarlo
+TODO: Target update should be softmax'd ? Probably
+TODO: L2 Weight Reg
+
+//TODO: Switch to PPO/TRPO lol
+Monte Carlo should be fine.
+
+
+Value Function Accuracy
+Reward Scaling
+DQN parameters: 10m Replay Buffer Size. 10k Target Network Update
+Policy Entropy?
+Update Size in output space and parameter space
+Visualize updates, loss
+Visualize network as much as possible
+Look at min/max/stdev of returns, along with mean
+Look at policy entropy
+Policy KL ?
+Try large batch size
+Big policy steps in any direction probably make it worse
+Final layer should have 0 or small initialization
+DQN converges slowly

@@ -1,0 +1,66 @@
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: Can't get attribute 'objective' on <module '__main__' from '/Library/Frameworks/Python.framework/Versions/3.6/bin/hyperopt-mongo-worker'>
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): Error while unpickling.
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: name 'worker' is not defined
+INFO (hyperopt.mongoexp): job exception: name 'worker' is not defined
+INFO (hyperopt.mongoexp): job exception: name 'worker' is not defined
+INFO (hyperopt.mongoexp): job exception: name 'worker' is not defined
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: cannot import name 'worker'
+INFO (hyperopt.mongoexp): job exception: cannot import name 'worker'
+INFO (hyperopt.mongoexp): job exception: cannot import name 'worker'
+INFO (hyperopt.mongoexp): job exception: cannot import name 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: No module named 'worker'
+INFO (hyperopt.mongoexp): job exception: list index out of range
+INFO (hyperopt.mongoexp): job exception: list index out of range
+INFO (hyperopt.mongoexp): job exception: list index out of range
+INFO (hyperopt.mongoexp): job exception: list index out of range
