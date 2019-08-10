@@ -68,6 +68,13 @@ class Agent:
             rewardScaling,
             agentName="agent_" + str(np.random.randint(low=100000000, high=999999999))
         ):
+        self.statePh = tf.placeholder(tf.float32, [None, numObservations], "StatePh")
+        self.nextStatePh = tf.placeholder(tf.float32, [None, numObservations], "NextStatePh")
+        self.actionsPh = tf.placeholder(tf.int32, [None,], "ActionsPh")
+        self.rewardsPh = tf.placeholder(tf.float32, [None,], "RewardsPh")
+        self.gammasPh = tf.placeholder(tf.float32, [None,], name="GammasPh")
+        self.quantileThresholdsPh = tf.placeholder(tf.float32, [None, numQuantiles], "QuantileThresholdsPh")
+        self.nextQuantileThresholdsPh = tf.placeholder(tf.float32, [None, numQuantiles], "NextQuantileThresholdsPh")
         self.agentName = agentName
         self.startTime = time.time()
         self.sess = sess
@@ -120,7 +127,14 @@ class Agent:
             postNetworkSize=postNetworkSize,
             numQuantiles=numQuantiles,
             embeddingDimension=embeddingDimension,
-            kappa=kappa
+            kappa=kappa,
+            statePh=self.statePh,
+            nextStatePh=self.nextStatePh,
+            actionsPh=self.actionsPh,
+            rewardsPh=self.rewardsPh,
+            gammasPh=self.gammasPh,
+            quantileThresholdsPh=self.quantileThresholdsPh,
+            nextQuantileThresholdsPh=self.nextQuantileThresholdsPh
         )
         self.learnedNetwork = Network(
             name="learned-network-" + self.agentName,
@@ -136,10 +150,18 @@ class Agent:
             numQuantiles=numQuantiles,
             embeddingDimension=embeddingDimension,
             kappa=kappa,
-            targetNetwork=self.targetNetwork
+            statePh=self.statePh,
+            nextStatePh=self.nextStatePh,
+            actionsPh=self.actionsPh,
+            rewardsPh=self.rewardsPh,
+            gammasPh=self.gammasPh,
+            quantileThresholdsPh=self.quantileThresholdsPh,
+            nextQuantileThresholdsPh=self.nextQuantileThresholdsPh
         )
-        self.duplicateLearnedNetwork = self.targetNetwork.buildSoftCopyOperation(self.learnedNetwork.networkParams, 1)
-        self.softCopyLearnedNetwork = self.targetNetwork.buildSoftCopyOperation(self.learnedNetwork.networkParams, self.tau)
+        self.learnedNetwork.setTargetNetwork(self.targetNetwork)
+
+        self.buildTrainingOperations()
+        self.buildActionOperations()
         self.minFramesForTraining = minFramesForTraining
         self.intermediateTests = intermediateTests
         self.testOutput = []
@@ -159,18 +181,71 @@ class Agent:
         self.epsilonOverTime = []
         self.choicesOverTime = []
         self.saver = tf.train.Saver()
+    def buildTrainingOperations(self):
+        (
+            loss,
+            trainLearnedNetwork
+        ) = self.learnedNetwork.buildTrainingOperation()
+
+        softCopyLearnedNetwork = self.targetNetwork.buildSoftCopyOperation(
+            self.learnedNetwork,
+            self.tau
+        )
+
+        self.duplicateLearnedNetwork = self.targetNetwork.buildSoftCopyOperation(
+            self.learnedNetwork,
+            1.0
+        )
+
+        self.trainingOperations = [
+            trainLearnedNetwork,
+            softCopyLearnedNetwork,
+            loss
+        ]
+    def buildActionOperations(self):
+        (
+            _,
+            qValues,
+            maxQ,
+            chosenAction,
+            _,
+            _
+        ) = self.learnedNetwork.buildNetwork(
+            self.statePh,
+            self.quantileThresholdsPh,
+            None
+        )
+
+        self.actionOperations = [
+            qValues,
+            maxQ,
+            chosenAction
+        ]
     def getAgentAssessment(self, state):
-        qValues, maxQ = self.sess.run([
-            self.learnedNetwork.qValues,
-            self.learnedNetwork.maxQ
-        ], feed_dict={
-            self.learnedNetwork.environmentInput: [state],
-            self.learnedNetwork.quantileThresholds: np.random.uniform(low=0.0, high=1.0, size=(1, self.numQuantiles))
+        (
+            qValues,
+            maxQ,
+            _
+        ) = self.sess.run(
+            self.actionOperations,
+        feed_dict={
+            self.statePh: [state],
+            self.quantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(1, self.numQuantiles))
         })
         self.agentAssessmentsOverTime.append(maxQ[0])
         self.recentAgentQValues = qValues[0]
     def getAction(self, state):
-        return self.learnedNetwork.getAction(state)
+        (
+            _,
+            _,
+            chosenAction
+        ) = self.sess.run(
+            self.actionOperations,
+        feed_dict={
+            self.statePh: [state],
+            self.quantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(1, self.numQuantiles))
+        })
+        return chosenAction[0]
     def goToNextState(self, currentState, actionChosen, stepNum):
         nextState, reward, done, info = self.env.step(actionChosen)
         self.totalEpisodeReward = self.totalEpisodeReward + reward
@@ -185,15 +260,29 @@ class Agent:
         return nextState, done
     def train(self):
         trainingEpisodes = self.memoryBuffer.getMemoryBatch()
-        targets, predictions, actions = self.learnedNetwork.trainAgainst(trainingEpisodes)
-        choice = np.random.randint(len(targets))
-        choice2 = np.random.randint(len(targets[choice]))
-        choice3 = np.random.randint(len(targets[choice][choice2]))
-        self.sess.run(self.softCopyLearnedNetwork)
-        self.recentTarget = targets[choice][choice2][choice3]
-        self.recentPrediction = predictions[choice][choice2][choice3]
-        self.recentAction = actions[choice]
-        self.memoryBuffer.updateMemories(trainingEpisodes)
+        (
+            trainLearnedNetwork,
+            softCopyLearnedNetwork,
+            loss
+        ) = self.sess.run(
+            self.trainingOperations
+        , feed_dict={
+            self.statePh: util.getColumn(trainingEpisodes, constants.STATE),
+            self.actionsPh: util.getColumn(trainingEpisodes, constants.ACTION),
+            self.rewardsPh: util.getColumn(trainingEpisodes, constants.REWARD),
+            self.gammasPh: util.getColumn(trainingEpisodes, constants.GAMMA),
+            self.nextStatePh: util.getColumn(trainingEpisodes, constants.NEXT_STATE),
+            self.quantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(self.batchSize, self.numQuantiles)),
+            self.nextQuantileThresholdsPh: np.random.uniform(low=0.0, high=1.0, size=(self.batchSize, self.numQuantiles))
+        })
+        # targets, predictions, actions = self.learnedNetwork.trainAgainst(trainingEpisodes)
+        # choice = np.random.randint(len(targets))
+        # choice2 = np.random.randint(len(targets[choice]))
+        # choice3 = np.random.randint(len(targets[choice][choice2]))
+        # self.recentTarget = targets[choice][choice2][choice3]
+        # self.recentPrediction = predictions[choice][choice2][choice3]
+        # self.recentAction = actions[choice]
+        # self.memoryBuffer.updateMemories(trainingEpisodes)
     def buildGraphs(self):
         self.overview = plt.figure()
         self.lastNRewardsGraph = self.overview.add_subplot(4, 1, 1)
