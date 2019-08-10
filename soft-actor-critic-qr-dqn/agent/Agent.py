@@ -84,7 +84,7 @@ class Agent:
             self.terminalsPh = tf.placeholder(tf.float32, [None, ], name="Terminals_Placeholder")
             self.memoryPriorityPh = tf.placeholder(tf.float32, [None, ], name="MemoryPriority_Placeholder")
         self.trainingOperations = []
-        self.env = gym.make('BipedalWalkerHardcore-v2')
+        self.env = gym.make('BipedalWalker-v2')
         self.startTime = time.time()
         self.randomStartSteps = randomStartSteps
         self.saveModel = saveModel
@@ -334,8 +334,7 @@ class Agent:
         colorbar(ax, cax=self.policyColorBar)
         self.policyFigure.canvas.draw()
     def outOfTime(self):
-        return (time.time() > self.startTime + (self.maxMinutes * 60))
-            or (self.globalStep >= self.maxTrainSteps)
+        return (time.time() > self.startTime + (self.maxMinutes * 60)) or (self.globalStep >= self.maxTrainSteps)
     def buildActionOperation(self):
         with self.graph.as_default():
             (

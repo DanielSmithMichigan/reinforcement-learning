@@ -4,13 +4,11 @@ from agent.Agent import Agent
 rewardScaling = 10.0 ** -0.75
 
 agent = Agent(
-    name="agent_7859975",
+    name="agent_4509965",
     actionScaling=1.0,
     policyNetworkSize=[256, 256],
-    qNetworkSizePre=[256, 256],
-    qNetworkSizePost=[256],
-    numQuantiles=8,
-    embeddingDimension=8,
+    qNetworkSize=[256, 256],
+    numQuantiles=16,
     policyNetworkLearningRate=3e-4,
     qNetworkLearningRate=3e-4,
     entropyCoefficient="auto",
@@ -43,7 +41,8 @@ agent = Agent(
     initialExtraNoise=0,
     extraNoiseDecay=0,
     evaluationEvery=25,
-    numFinalEvaluations=10
+    numFinalEvaluations=10,
+    maxTrainSteps = 1000000
 )
 
 print("Total Reward: "+str(agent.execute()))
