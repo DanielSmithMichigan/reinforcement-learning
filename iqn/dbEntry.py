@@ -23,7 +23,7 @@ a = Agent(
     # test parameters
     episodesPerTest=25,
     stepsPerTrainingPeriod=4,
-    numTestPeriods=20,
+    numTestPeriods=14,
     numTestsPerTestPeriod=20,
     maxRunningMinutes=3600,
     episodeStepLimit=1024,
