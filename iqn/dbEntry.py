@@ -23,7 +23,7 @@ a = Agent(
     # test parameters
     episodesPerTest=25,
     stepsPerTrainingPeriod=4,
-    numTestPeriods=20,
+    numTestPeriods=12,
     numTestsPerTestPeriod=20,
     maxRunningMinutes=3600,
     episodeStepLimit=1024,
@@ -45,7 +45,7 @@ a = Agent(
     learningRate=6.25e-4,
     priorityExponent= 0,
     epsilonInitial = 1,
-    epsilonDecay = .997,
+    epsilonDecay = .995,
     minExploration = .01,
     maxExploration = 1.0,
     minFramesForTraining = 2048,
