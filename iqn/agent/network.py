@@ -81,7 +81,7 @@ class Network:
             timestep = tf.pow(2.0, tf.cast(tf.range(self.embeddingDimension), tf.float32))
             timestep = tf.reshape(timestep, [1, 1, self.embeddingDimension])
             tiledQuantiles = quantilesEmbeddingBox * timestep
-            tiledQuantiles = tiledQuantiles - tf.math.floor(tiledQuantiles)
+            tiledQuantiles = tf.math.cos(tiledQuantiles)
             embeddedQuantiles = tf.layers.dense(
                 inputs=tiledQuantiles,
                 units=self.preNetworkSize[-1],

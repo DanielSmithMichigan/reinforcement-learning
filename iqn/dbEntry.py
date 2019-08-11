@@ -6,7 +6,7 @@ import tensorflow as tf
 import gym
 db = MySQLdb.connect(host="dqn-db-instance.coib1qtynvtw.us-west-2.rds.amazonaws.com", user="dsmith682101", passwd=os.environ['MYSQL_PASS'], db="dqn_results")
 
-experimentName = "iqn-embedding-sawtooth-2"
+experimentName = "iqn-embedding-sinusoidal"
 embeddingDimension = np.random.randint(low=1, high=32)
 env = gym.make('LunarLander-v2')
 sess = tf.Session()
