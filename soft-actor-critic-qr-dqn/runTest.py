@@ -14,7 +14,7 @@ agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 experimentName = "qr-dqn-nStep-shorter"
 # experimentName = "qr-dqn-actor-critic"
 
-nStep = np.random.randint(low=1, high=6)
+nStep = np.random.randint(low=1, high=8)
 
 
 try:
