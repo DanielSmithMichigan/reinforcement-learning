@@ -12,20 +12,13 @@ results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
 
-experimentName = os.environ['EXPERIMENT_NAME']
+# experimentName = os.environ['EXPERIMENT_NAME']
+experimentName = "iqn-n-step"
 
 rewardScaling = 10.0 ** -0.75
-initialExtraNoise = 0
-extraNoiseDecay = 0
 maxMinutes = 180
-priorityExponent = 0.0
-minStepsBeforeTraining = 4096
 
-if experimentName == 'bipedal-walker-min-steps-2':
-    minStepsBeforeTraining = math.e ** np.random.uniform(low=8, high=12)
-elif experimentName == 'bipedal-walker-max-minutes-2':
-    maxMinutes = np.random.randint(low=30,high=180)
-
+nStep = np.random.randint(0, 10)
 
 try:
     agent = Agent(
@@ -35,7 +28,7 @@ try:
         qNetworkSizePre=[256, 256],
         qNetworkSizePost=[256],
         numQuantiles=8,
-        embeddingDimension=8,
+        embeddingDimension=1,
         policyNetworkLearningRate=3e-4,
         qNetworkLearningRate=3e-4,
         entropyCoefficient="auto",
@@ -45,25 +38,26 @@ try:
         maxMemoryLength=int(5e6),
         priorityExponent=0.0,
         batchSize=64,
+        nStep=nStep,
         maxEpisodes=4096,
         trainSteps=1024,
-        minStepsBeforeTraining=4096,
+        minStepsBeforeTraining=40000,
         rewardScaling=(10.0 ** -0.75),
         actionShift=0.0,
         stepsPerUpdate=1,
         render=False,
         showGraphs=False,
-        saveModel=True,
-        saveModelToS3=True,
+        saveModel=False,
+        saveModelToS3=False,
         restoreModel=False,
         train=True,
         testSteps=1024,
-        maxMinutes=180,
+        maxMinutes=maxMinutes,
         targetEntropy=-4.0,
         maxGradientNorm=5.0,
         meanRegularizationConstant=0.0,
         varianceRegularizationConstant=0.0,
-        randomStartSteps=10000,
+        randomStartSteps=40000,
         gradientSteps=1,
         initialExtraNoise=0,
         extraNoiseDecay=0,
@@ -78,7 +72,7 @@ except:
 for resultNum in range(len(results)):
     cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, trainingSteps, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}')".format(
             experimentName,
-            0,
+            nStep,
             0,
             0,
             0,

@@ -20,6 +20,7 @@ from . import util
 
 from .prioritized_experience_replay import PrioritizedExperienceReplay
 from .simple_experience_replay import SimpleExperienceReplay
+from .memory_batcher import MemoryBatcher
 
 class Agent:
     def __init__(self,
@@ -38,6 +39,7 @@ class Agent:
             maxMemoryLength,
             priorityExponent,
             batchSize,
+            nStep,
             maxEpisodes,
             trainSteps,
             rewardScaling,
@@ -167,17 +169,22 @@ class Agent:
         self.buildActionOperation()
         self.buildGraphingOperation()
 
-        if float(priorityExponent) != 0.0:
-            self.memoryBuffer = PrioritizedExperienceReplay(
-                numMemories=maxMemoryLength,
-                priorityExponent=priorityExponent,
-                batchSize=batchSize
-            )
-        else:
-            self.memoryBuffer = SimpleExperienceReplay(
-                numMemories=maxMemoryLength,
-                batchSize=batchSize
-            )
+        # if float(priorityExponent) != 0.0:
+        #     self.memoryBuffer = PrioritizedExperienceReplay(
+        #         numMemories=maxMemoryLength,
+        #         priorityExponent=priorityExponent,
+        #         batchSize=batchSize
+        #     )
+        # else:
+        #     self.memoryBuffer = SimpleExperienceReplay(
+        #         numMemories=maxMemoryLength,
+        #         batchSize=batchSize
+        #     )
+        self.memoryBuffer = MemoryBatcher(
+            numMemories=maxMemoryLength,
+            batchSize=batchSize,
+            nStep=nStep
+        )
 
         self.name = name
         self.maxEpisodes = maxEpisodes
@@ -551,6 +558,7 @@ class Agent:
                 break
         if not done:
             self.goToNextState(deterministic=evaluation, endEarly=True)
+        self.memoryBuffer.endEpisode()
         if evaluation:
             self.evaluations.append([
                 self.totalEpisodeReward,
