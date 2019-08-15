@@ -11,10 +11,10 @@ cur = db.cursor()
 results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
-experimentName = "qr-dqn-nStep"
+experimentName = "qr-dqn-nStep-shorter"
 # experimentName = "qr-dqn-actor-critic"
 
-nStep = np.random.randint(low=1, high=12)
+nStep = np.random.randint(low=1, high=6)
 
 
 try:
@@ -48,7 +48,7 @@ try:
         restoreModel=False,
         train=True,
         testSteps=1024,
-        maxMinutes=180,
+        maxMinutes=100,
         targetEntropy=-4.0,
         maxGradientNorm=5.0,
         meanRegularizationConstant=0.0,
