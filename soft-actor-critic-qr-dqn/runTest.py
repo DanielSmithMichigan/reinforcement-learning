@@ -14,7 +14,7 @@ agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 experimentName = "qr-dqn-nStep-frame-skip"
 # experimentName = "qr-dqn-actor-critic"
 
-frameSkip = np.random.randint(low=1, high=10)
+frameSkip = np.random.randint(low=1, high=3)
 
 
 try:
