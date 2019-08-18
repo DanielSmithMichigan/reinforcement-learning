@@ -39,6 +39,7 @@ class Agent:
             priorityExponent,
             batchSize,
             nStep,
+            frameSkip,
             maxEpisodes,
             maxTrainSteps,
             trainSteps,
@@ -179,6 +180,7 @@ class Agent:
         self.maxEpisodes = maxEpisodes
         self.maxTrainSteps = maxTrainSteps
         self.trainSteps = trainSteps
+        self.frameSkip = frameSkip
         self.rewardScaling = rewardScaling
         self.numQuantiles = numQuantiles
         self.gamma = gamma
@@ -411,23 +413,26 @@ class Agent:
             actionsChosen = self.env.action_space.sample()
         self.actionsChosen.append(actionsChosen)
         self.entropyOverTime.append(entropy)
-        nextState, reward, done, info = self.env.step(actionsChosen)
-        if endEarly:
-            done = True
-        nextState = np.reshape(nextState, [self.numStateVariables,])
-        if (self.render):
-            self.env.render()
-        memoryEntry = np.array(np.zeros(constants.NUM_MEMORY_ENTRIES), dtype=object)
-        memoryEntry[constants.STATE] = self.state
-        memoryEntry[constants.ACTION] = actionsChosen
-        memoryEntry[constants.REWARD] = reward * self.rewardScaling
-        memoryEntry[constants.NEXT_STATE] = nextState
-        memoryEntry[constants.GAMMA] = self.gamma if not done else 0
-        memoryEntry[constants.IS_TERMINAL] = done
-        self.state = nextState
-        self.memoryBuffer.add(memoryEntry)
+        for i in range(self.frameSkip):
+            nextState, reward, done, info = self.env.step(actionsChosen)
+            if endEarly:
+                done = True
+            nextState = np.reshape(nextState, [self.numStateVariables,])
+            if (self.render):
+                self.env.render()
+            memoryEntry = np.array(np.zeros(constants.NUM_MEMORY_ENTRIES), dtype=object)
+            memoryEntry[constants.STATE] = self.state
+            memoryEntry[constants.ACTION] = actionsChosen
+            memoryEntry[constants.REWARD] = reward * self.rewardScaling
+            memoryEntry[constants.NEXT_STATE] = nextState
+            memoryEntry[constants.GAMMA] = self.gamma if not done else 0
+            memoryEntry[constants.IS_TERMINAL] = done
+            self.state = nextState
+            self.memoryBuffer.add(memoryEntry)
+            self.totalEpisodeReward = self.totalEpisodeReward + reward
+            if done:
+                break
         self.globalStep += 1
-        self.totalEpisodeReward = self.totalEpisodeReward + reward
         if self.globalStep % self.stepsPerUpdate == 0 and self.globalStep > self.minStepsBeforeTraining and self.train:
             for i in range(self.gradientSteps):
                 self.trainNetworks()
@@ -552,7 +557,7 @@ class Agent:
         self.memoryBuffer.endEpisode()
         self.episodeRewards.append(self.totalEpisodeReward)
         fps = self.updateFps()
-        print("REWARD: "+str(self.totalEpisodeReward)+" STEPS: "+str(self.trainingSteps)+" FPS: "+str(fps))
+        print("REWARD: "+str(self.totalEpisodeReward)+" STEPS: "+str(self.trainingSteps)+" FPS: "+str(fps) + " GLOBAL STEP: "+str(self.globalStep))
         if self.showGraphs:
             self.updateGraphs()
         if upload:

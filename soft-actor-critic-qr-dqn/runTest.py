@@ -11,10 +11,10 @@ cur = db.cursor()
 results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
-experimentName = "qr-dqn-nStep-shorter-2"
+experimentName = "qr-dqn-nStep-frame-skip"
 # experimentName = "qr-dqn-actor-critic"
 
-nStep = np.random.randint(low=8, high=14)
+frameSkip = np.random.randint(low=1, high=10)
 
 
 try:
@@ -33,7 +33,8 @@ try:
         maxMemoryLength=int(5e6),
         priorityExponent=0.0,
         batchSize=64,
-        nStep=nStep,
+        nStep=3,
+        frameSkip=frameSkip,
         maxEpisodes=4096,
         trainSteps=1024,
         maxTrainSteps=6000000,

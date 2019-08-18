@@ -20,6 +20,7 @@ agent = Agent(
     priorityExponent=0.0,
     batchSize=64,
     nStep=3,
+    frameSkip=3,
     maxEpisodes=4096,
     trainSteps=1024,
     maxTrainSteps=6000000,
