@@ -11,10 +11,11 @@ cur = db.cursor()
 results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
-experimentName = "qr-dqn-nStep-frame-skip"
+experimentName = "qr-dqn-reward-scaling"
 # experimentName = "qr-dqn-actor-critic"
 
-frameSkip = np.random.randint(low=1, high=10)
+rewardScalingExp = np.random.uniform(low=-6.0, high=2.0)
+rewardScaling = math.e ** rewardScalingExp
 
 
 try:
@@ -30,16 +31,16 @@ try:
         tau=0.005,
         gamma=0.99,
         kappa=1.0,
-        maxMemoryLength=int(5e6),
+        maxMemoryLength=int(1e5),
         priorityExponent=0.0,
         batchSize=64,
         nStep=3,
-        frameSkip=frameSkip,
+        frameSkip=2,
         maxEpisodes=4096,
         trainSteps=1024,
         maxTrainSteps=6000000,
         minStepsBeforeTraining=40000,
-        rewardScaling=(10.0 ** -0.75),
+        rewardScaling=rewardScaling,
         actionShift=0.0,
         stepsPerUpdate=1,
         render=False,
@@ -69,7 +70,7 @@ except:
 for resultNum in range(len(results)):
     cur.execute("insert into experiments (label, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, y, checkpoint, trainingSteps, agent_name) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', '{8}', '{9}', '{10}', '{11}', '{12}', '{13}', '{14}')".format(
             experimentName,
-            frameSkip,
+            rewardScaling,
             0,
             0,
             0,

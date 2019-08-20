@@ -87,7 +87,7 @@ class Agent:
             self.terminalsPh = tf.placeholder(tf.float32, [None, ], name="Terminals_Placeholder")
             self.memoryPriorityPh = tf.placeholder(tf.float32, [None, ], name="MemoryPriority_Placeholder")
         self.trainingOperations = []
-        self.env = gym.make('BipedalWalker-v2')
+        self.env = gym.make('BipedalWalkerHardcore-v2')
         self.startTime = time.time()
         self.randomStartSteps = randomStartSteps
         self.saveModel = saveModel
