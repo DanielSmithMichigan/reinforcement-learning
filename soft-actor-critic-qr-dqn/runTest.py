@@ -50,7 +50,7 @@ try:
         restoreModel=False,
         train=True,
         testSteps=1024,
-        maxMinutes=60,
+        maxMinutes=180,
         targetEntropy=-4.0,
         maxGradientNorm=5.0,
         meanRegularizationConstant=0.0,
