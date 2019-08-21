@@ -11,10 +11,10 @@ cur = db.cursor()
 results = [-20000]
 agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 
-experimentName = "qr-dqn-reward-scaling"
+experimentName = "qr-dqn-reward-scaling-2"
 # experimentName = "qr-dqn-actor-critic"
 
-rewardScalingExp = np.random.uniform(low=-6.0, high=2.0)
+rewardScalingExp = np.random.uniform(low=-2.0, high=2.0)
 rewardScaling = math.e ** rewardScalingExp
 
 
@@ -24,7 +24,7 @@ try:
         actionScaling=1.0,
         policyNetworkSize=[256, 256],
         qNetworkSize=[256, 256],
-        numQuantiles=16,
+        numQuantiles=32,
         policyNetworkLearningRate=3e-4,
         qNetworkLearningRate=3e-4,
         entropyCoefficient="auto",
