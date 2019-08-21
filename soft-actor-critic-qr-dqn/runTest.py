@@ -14,7 +14,7 @@ agentName = "agent_"+str(np.random.randint(low=1000000,high=9999999))
 experimentName = "qr-dqn-reward-scaling-2"
 # experimentName = "qr-dqn-actor-critic"
 
-rewardScalingExp = np.random.uniform(low=-2.0, high=2.0)
+rewardScalingExp = np.random.uniform(low=-2.0, high=1.0)
 rewardScaling = math.e ** rewardScalingExp
 
 
