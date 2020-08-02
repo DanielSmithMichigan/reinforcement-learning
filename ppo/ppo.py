@@ -6,53 +6,78 @@ import tensorflow_probability as tfp
 
 import matplotlib
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.colorbar import colorbar
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+
+import math
+
+import random
+
+# from ParallelEnv2 import SubprocVecEnv
+from ParallelEnv import ParallelEnv
+plt.ion()
+
+overview = plt.figure()
+loss_graph = overview.add_subplot(2, 1, 1)
+critic_graph = overview.add_subplot(2, 1, 2)
+
+prediction_pair_figure = plt.figure()
+prediction_pair_graph = prediction_pair_figure.add_subplot(1, 1, 1)
+
+entropy_figure = plt.figure()
+entropy_graph = entropy_figure.add_subplot(1, 1, 1)
 
 epsilon = 1e-8
 
-def gaussian_probability(action, action_mean, log_action_std):
-    return -0.5 * (((action - action_mean) / (tf.exp(log_action_std) + epsilon)) ** 2 + 2 * log_action_std + np.log(2 * np.pi))
+def neg_log_prob_tensor(actions_chosen, action_mean, log_action_std):
+    std = tf.exp(log_action_std)
+    return 0.5 * tf.reduce_sum(tf.square((actions_chosen - action_mean) / std), axis=-1) \
+               + 0.5 * np.log(2.0 * np.pi) * tf.cast(tf.shape(actions_chosen)[-1], tf.float32) \
+               + tf.reduce_sum(log_action_std, axis=-1)
 
-env = gym.make("BipedalWalker-v3")
-num_observations = 24
-num_actions = 4
-learning_rate = 0.01
-population_size = 512
-sigma = 0.1
-max_steps = 1024
+def log_prob_tensor(actions_chosen, action_mean, log_action_std):
+    return - neg_log_prob_tensor(actions_chosen, action_mean, log_action_std)
+
+    
+
+# def entropy(self):
+#     return tf.reduce_sum(self.logstd + .5 * np.log(2.0 * np.pi * np.e), axis=-1)
+
+def entropy_tensor(log_action_std):
+    return tf.reduce_sum(log_action_std + .5 * np.log(2.0 * np.pi * np.e), axis=-1)
+
+env_name = "Pendulum-v0"
+test_env = gym.make(env_name)
+action_scaling = 2.0
+learning_rate = 2e-4
 loss_surrogate_2_clip = 0.2
-entropy_beta = 0.001
+entropy_coefficient = 0.04
 critic_discount = 0.5
 gae_lambda = 0.95
 gamma = 0.99
-
-num_iterations = 1000
-
-def compute_gae(rewards, is_terminals, values):
-    # Need to append final value to values
-    gae = 0
-    returns = []
-    for step in reversed(range(len(rewards))):
-        delta = rewards[step] + gamma * values[step + 1] * is_terminals[step] - values[step]
-        gae = delta + gamma * gae_lambda * is_terminals[step] * gae
-        returns.insert(0, gae + values[step])
-    return returns
+num_envs = 8
+steps_per_training_iteration = 512
+steps_per_evaluation = 1024
+max_episode_steps = 2048
+num_training_iterations = 10000
+max_gradient_norm = 5
+batch_size = 64
+training_epochs = 10
+target_entropy = -4.0
+reward_scaling = 1e-2
+IMAGE_SIZE = 200
 
 layers = [
-    40,
-    40
+    64,
+    64
 ]
 
-num_iterations = 10000
-
-overview = plt.figure()
-lastNRewardsGraph = overview.add_subplot(1, 1, 1)
-
-actions_ph = tf.placeholder(tf.float32, [None, num_actions], name="ActionsPlaceholder")
-state_ph = tf.placeholder(tf.float32, [None, num_observations], name="StatePlaceholder")
-randoms_placeholder = tf.placeholder(tf.float32, [None, num_actions], name="RandomsPlaceholder")
-advantages_ph = tf.placeholder(tf.float32, [None, 1], name="AdvantagesPlaceholder")
-returns_ph = tf.placeholder(tf.float32, [None, 1], name="ReturnsPlaceholder")
-old_policy_log_prob_ph = tf.placeholder(tf.float32, [None, 1], name="OldPolicyLogProbPh")
+actions_ph = tf.placeholder(tf.float32, [None,  test_env.action_space.shape[0]], name="ActionsPlaceholder")
+state_ph = tf.placeholder(tf.float32, [None,  test_env.observation_space.shape[0] + 1], name="StatePlaceholder")
+randoms_placeholder = tf.placeholder(tf.float32, [None,  test_env.action_space.shape[0]], name="RandomsPlaceholder")
+advantages_ph = tf.placeholder(tf.float32, [None,], name="AdvantagesPlaceholder")
+returns_ph = tf.placeholder(tf.float32, [None,], name="ReturnsPlaceholder")
+old_action_old_log_prob_ph = tf.placeholder(tf.float32, [None,], name="OldPolicyLogProbPh")
 
 def build_value_network():
     with tf.variable_scope("ValueNetwork"):
@@ -70,7 +95,7 @@ def build_value_network():
             activation=None,
             name="ValuePrediction"
         )
-        return value_prediction
+        return tf.reshape(value_prediction, [-1])
     
 def build_policy_network():
     with tf.variable_scope("PolicyNetwork"):
@@ -84,86 +109,259 @@ def build_policy_network():
             )
         action_mean = tf.layers.dense(
             inputs=prev_layer,
-            units=num_actions,
-            activation=tf.nn.tanh,
+            units=test_env.action_space.shape[0],
+            activation=None,
             name="ActionMean"
         )
         log_action_std = tf.layers.dense(
             inputs=prev_layer,
-            units=num_actions,
-            activation=tf.nn.tanh,
+            units=test_env.action_space.shape[0],
+            activation=None,
             name="LogActionStd"
         )
-        action_output = action_mean + randoms_placeholder * tf.exp(log_action_std)
-        log_prob = tf.reduce_sum(gaussian_probability(actions_ph, action_mean, log_action_std) - tf.log(1 - actions_ph ** 2 + epsilon), axis=1)
-        log_prob_action_output = tf.reduce_sum(gaussian_probability(action_output, action_mean, log_action_std) - tf.log(1 - action_output ** 2 + epsilon), axis=1)
-        return action_output, log_prob_action_output, log_prob, action_mean
+        action_chosen = action_mean + randoms_placeholder * tf.exp(log_action_std)
+        log_prob = log_prob_tensor(action_chosen, action_mean, log_action_std)
+        old_action_new_log_prob = log_prob_tensor(actions_ph , action_mean, log_action_std)
+        entropy = entropy_tensor(log_action_std)
+        return action_chosen, log_prob, entropy, old_action_new_log_prob, action_mean, log_action_std
  
 
-action_output, log_prob_action_output, log_prob, action_mean = build_policy_network()
+action_output, log_prob, entropy, old_action_new_log_prob, action_mean, log_action_std = build_policy_network()
 value_prediction = build_value_network()
 
-policy_ratio = tf.exp(log_prob - old_policy_log_prob_ph)
+
+policy_ratio = tf.exp(old_action_new_log_prob - old_action_old_log_prob_ph)
+
 
 loss_surrogate_1 = policy_ratio * advantages_ph
 loss_surrogate_2 = tf.clip_by_value(policy_ratio, 1.0 - loss_surrogate_2_clip, 1.0 + loss_surrogate_2_clip) * advantages_ph
-actor_loss = -tf.reduce_mean(tf.minimum(loss_surrogate_1, loss_surrogate_2))
-critic_loss = tf.reduce_mean((returns_ph - value_prediction) ** 2)
-total_loss = critic_discount * critic_loss + actor_loss - entropy_beta * tf.reduce_mean(-(log_prob * tf.log(log_prob + epsilon)))
+min_loss_surrogates = tf.minimum(loss_surrogate_1, loss_surrogate_2)
+actor_loss = -tf.reduce_mean(min_loss_surrogates)
+batch_critic_loss = (returns_ph - value_prediction) ** 2
+critic_loss = tf.reduce_mean(batch_critic_loss)
+entropy_loss = tf.reduce_mean(entropy)
 
+total_loss = critic_discount * critic_loss + actor_loss - entropy_coefficient * entropy_loss
+optimizer = tf.train.AdamOptimizer(learning_rate)
+
+gradients, variables = zip(
+    *optimizer.compute_gradients(
+        total_loss,
+        var_list=tf.trainable_variables()
+    )
+)
+gradients, _ = tf.clip_by_global_norm(gradients, max_gradient_norm)
+training_operation = optimizer.apply_gradients(
+    zip(gradients, variables)
+)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
-rewards = []
-states = []
-values = []
-actions_chosen = []
-value_predictions = []
-log_probs = []
-is_terminals = []
-returns = []
+policyFigure = plt.figure()
+policyFigure.suptitle("Policy")
+policyGraph = policyFigure.add_subplot(1, 1, 1)
+divider = make_axes_locatable(policyGraph)
+policyColorBar = divider.append_axes("right", size="7%", pad="2%")
 
-for i in range(num_iterations):    
-    print("Episode{}".format(i))
-    state = env.reset()
+def updateAssessmentGraphs():
+    states = []
+    imageRadius = IMAGE_SIZE / 2
+    for xImg in range(IMAGE_SIZE):
+        for yImg in range(IMAGE_SIZE):
+            x = xImg - imageRadius
+            y = yImg - imageRadius
+            v = np.clip(math.sqrt(x * x + y * y) * 16 / imageRadius, 0, 16)
+            v = v - 8
+
+            theta = None
+            if x < 0:
+                theta = math.atan(y / x) + math.pi
+            elif x == 0 and y > 0:
+                theta = math.pi
+            elif x == 0 and y < 0:
+                theta = -math.pi
+            elif x == 0 and y == 0:
+                theta = 0
+            elif x > 0 and y < 0:
+                theta = math.atan(y / x) + math.pi + math.pi
+            else:
+                theta = math.atan(y / x)
+            states.append([math.cos(theta), math.sin(theta), v])
+    (
+        action_mean_val
+    ) = sess.run([
+        action_mean
+    ], feed_dict={
+        state_ph: states
+    })
+
+    actionsChosenImg = np.reshape(action_mean_val, [IMAGE_SIZE, IMAGE_SIZE])
+
+    policyGraph.cla()
+    policyColorBar.cla()
+    ax=policyGraph.imshow(actionsChosenImg)
+    colorbar(ax, cax=policyColorBar)
+    policyFigure.canvas.draw()
+
+total_loss_over_time = []
+prediction_pairs = []
+loss_surrogate_1_over_time = []
+loss_surrogate_2_over_time = []
+actor_loss_over_time = []
+critic_loss_over_time = []
+entropy_loss_over_time = []
+entropy_over_time = []
+
+env = ParallelEnv(
+    num_envs,
+    env_name,
+    steps_per_training_iteration,
+    gamma,
+    gae_lambda,
+    action_scaling,
+    reward_scaling,
+    sess,
+    action_mean,
+    action_output,
+    value_prediction,
+    log_prob,
+    entropy,
+    log_action_std,
+    state_ph,
+    randoms_placeholder,
+    max_episode_steps,
+)
+
+for training_iteration_idx in range(num_training_iterations):
+
+    [
+        training_iteration_states,
+        training_iteration_actions_chosen,
+        training_iteration_value_predictions,
+        training_iteration_log_probs,
+        training_iteration_returns,
+        training_iteration_advantages,
+    ] = env.step()
+
+    for epoch_key in range(training_epochs):
+
+        indices = [*range(len(training_iteration_states))]
+        random.shuffle(indices)
+        batches = np.array_split(indices, len(indices) // batch_size)
+
+        for batch_key in range(len(batches)):
+            batch_idx = batches[batch_key]
+            batch_advantages = np.reshape(training_iteration_advantages[batch_idx], [-1])
+            batch_returns = np.array(training_iteration_returns)[batch_idx]
+            batch_returns = np.reshape(batch_returns, [-1])
+            batch_states = np.array(training_iteration_states)[batch_idx]
+            batch_old_policy_log_probs = np.reshape(training_iteration_log_probs[batch_idx], [-1])
+            batch_actions = training_iteration_actions_chosen[batch_idx]
+            batch_randoms = np.random.normal(0.0, 1.0, size=(batch_size, test_env.action_space.shape[0]))
+            # print("Training Operation {}:{}".format(epoch_key, batch_key))
+            [
+                _,
+                total_loss_val,
+                policy_ratio_val,
+                loss_surrogate_1_val,
+                loss_surrogate_2_val,
+                actor_loss_val,
+                critic_loss_val,
+                entropy_loss_val,
+                value_prediction_vals
+            ] = sess.run([
+                training_operation,
+                total_loss,
+                policy_ratio,
+                loss_surrogate_1,
+                loss_surrogate_2,
+                actor_loss,
+                critic_loss,
+                entropy_loss,
+                value_prediction
+            ], feed_dict={
+                    advantages_ph: batch_advantages,
+                    returns_ph: batch_returns,
+                    state_ph: batch_states,
+                    old_action_old_log_prob_ph: batch_old_policy_log_probs,
+                    actions_ph: batch_actions,
+                    randoms_placeholder: batch_randoms
+                }
+            )
+
+            # print('''
+            #     Total loss: {}
+            #     Actor Loss: {}
+            #     Critic Loss: {}
+            #     Loss Surrogate 1 {}
+            #     Loss Surrogate 2: {}
+            #     Policy Ratio: {}
+            #     Entropy Loss: {}
+            # '''.format(
+            #     total_loss_val,
+            #     actor_loss_val,
+            #     critic_loss_val,
+            #     np.mean(loss_surrogate_1_val),
+            #     np.mean(loss_surrogate_2_val),
+            #     np.mean(policy_ratio_val),
+            #     entropy_loss_val
+            # )
+            
+
+            if (batch_key % 25) == 0:
+                total_loss_over_time = total_loss_over_time + [total_loss_val]
+                loss_surrogate_1_over_time.append(np.mean(loss_surrogate_1_val))
+                loss_surrogate_2_over_time.append(np.mean(loss_surrogate_2_val))
+                entropy_loss_over_time.append(entropy_loss_val)
+
+                actor_loss_over_time.append(actor_loss_val)
+                critic_loss_over_time.append(critic_loss_val)
+
+                critic_graph.cla()
+                critic_graph.plot(critic_loss_over_time, label="Critic Loss")
+                prediction_pair_graph.cla()
+                prediction_pair_graph.scatter(value_prediction_vals / reward_scaling, batch_returns / reward_scaling, label="Predictions")
+                prediction_pair_graph.set_xlim(-100, 100)
+                prediction_pair_graph.set_ylim(-100, 100)
+                entropy_graph.cla()
+                entropy_graph.plot(entropy_over_time, label="Entropy Over Time")
+
+                loss_graph.cla()
+                # loss_graph.plot(total_loss_over_time, label="Total Loss")
+                loss_graph.plot(loss_surrogate_1_over_time, label="Loss Surrogate 1")
+                loss_graph.plot(loss_surrogate_2_over_time, label="Loss Surrogate 2")
+                loss_graph.plot(actor_loss_over_time, label="Actor Loss")
+                loss_graph.plot(critic_loss_over_time, label="Critic Loss")
+                loss_graph.plot(entropy_loss_over_time, label="Entropy Loss")
+                loss_graph.legend(loc=2)
+
+                overview.canvas.draw()
+                prediction_pair_figure.canvas.draw()
+                entropy_figure.canvas.draw()
+
+                # updateAssessmentGraphs()
+                plt.pause(0.01)
+
+    state = test_env.reset()
+    state = np.reshape(state, [test_env.observation_space.shape[0]])
+    state = np.append(state, [0])
+
+    test_env.render()
+
     done = False
-    total_reward = 0
-    total_steps = 0
+    total_rewards = 0
 
-    while not done and total_steps < max_steps:
-        [
-            action_mean_val,
-            action_chosen_val,
-            value_prediction_val,
-            log_prob_val
-        ] = sess.run([
-            action_mean,
-            action_output,
-            value_prediction,
-            log_prob_action_output,
-        ], feed_dict={
-            state_ph: np.reshape(state, [1, num_observations]),
-            randoms_placeholder: np.random.normal(0.0, 1.0, size=(1, num_actions))
-        })
+    for i in range(steps_per_evaluation):
+        action_mean_val = sess.run(action_mean, feed_dict={ state_ph: [ state ] })
+        action_mean_val = action_mean_val[0]
+        action_mean_val = action_scaling * np.tanh(action_mean_val)
 
-        next_state, reward, done, info = env.step(action_chosen_val[0])
-        state = next_state
-        total_reward += reward
-        total_steps += 1
+        state, reward, done, _ = test_env.step(action_mean_val)
+        test_env.render()
+        state = np.reshape(state, [test_env.observation_space.shape[0]])
+        state = np.append(state, [i / steps_per_evaluation])
 
-        rewards.append(reward)
-        states.append(state)
-
-        log_probs.append(log_prob_val)
-        values.append(value_prediction_val)
-        actions_chosen.append(action_chosen_val)
-        is_terminals.append(done)
-    
-        value_prediction_val = sess.run(
-            value_prediction,
-            feed_dict={state_ph: np.reshape(state, [1, num_observations])}
-        )
-        
-        returns = returns + compute_gae(rewards, is_terminals, values + [value_prediction_val])
+        total_rewards += reward
+    print("total_rewards: {}".format(total_rewards))
 
